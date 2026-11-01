@@ -39,17 +39,21 @@
 
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:99; }
   .overlay.show { display:block; }
+  
   #form { display:none; background:#fff; padding:20px; border-radius:12px; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:90%; max-width:400px; z-index:100; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
   #form h3 { margin:0 0 15px; font-size:18px; }
   #form label { font-size:13px; font-weight:600; color:#52525b; margin-bottom:4px; display:block; }
   #form input { width:100%; padding:12px; font-size:16px; border:1px solid #d4d4d8; border-radius:8px; margin-bottom:15px; }
+
+  #backupModal { display:none; background:#fff; padding:20px; border-radius:12px; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:90%; max-width:400px; z-index:100; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center;}
+  #backupModal h3 { margin:0 0 15px; font-size:18px; }
 </style>
 </head>
 <body>
 
 <header>
   <span>🛒 Scan Barang</span>
-  <button id="backupBtn">💾 Simpan Senarai</button>
+  <button id="backupBtn">💾 Backup/Import</button>
 </header>
 
 <div class="wrap">
@@ -71,6 +75,7 @@
 </div>
 
 <div class="overlay" id="overlay"></div>
+
 <div id="form">
   <h3>Maklumat Barang</h3>
   <label>Barcode</label>
@@ -86,6 +91,17 @@
   <button class="btn grey" id="cancelBtn">Tutup</button>
 </div>
 
+<div id="backupModal">
+  <h3>💾 Backup & Restore</h3>
+  <p style="font-size:13px; color:#52525b; margin-bottom:15px;">Simpan fail ke telefon, atau pulihkan dari fail JSON.</p>
+  
+  <button class="btn green" id="exportBtn">⬇️ Simpan Fail (Export)</button>
+  <label for="fileInput" class="btn dark" style="display:block; text-align:center; line-height:24px;">⬆️ Import Fail (Tambah Data)</label>
+  <input type="file" id="fileInput" accept=".json,application/json" style="display:none;">
+  
+  <button class="btn grey" id="closeBackup" style="margin-top:10px;">Tutup</button>
+</div>
+
 <script>
 const LS_DATA = 'senarai_barcode';
 const LS_HARGA = 'db_harga';
@@ -94,6 +110,7 @@ let senarai = JSON.parse(localStorage.getItem(LS_DATA) || '[]');
 let dbHarga = JSON.parse(localStorage.getItem(LS_HARGA) || '{}');
 let html5QrCode = null;
 let editIndex = -1;
+let isProcessingScan = false;
 
 const $ = id => document.getElementById(id);
 
@@ -155,7 +172,6 @@ $('saveBtn').onclick = () => {
   senarai[editIndex].nama = nama;
   senarai[editIndex].harga = harga;
 
-  // BETULKAN: Simpan ke memori asalkan nama diisi, walaupun harga kosong
   if (barcode !== 'manual' && nama !== '') {
     dbHarga[barcode] = { nama, harga };
     localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
@@ -163,26 +179,20 @@ $('saveBtn').onclick = () => {
 
   render();
   tutupForm();
-  
-  if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.PAUSED) {
-    html5QrCode.resume();
-  }
 };
 
 function tutupForm() {
   $('overlay').classList.remove('show');
   $('form').style.display = 'none';
   editIndex = -1;
+  isProcessingScan = false; 
 }
-$('cancelBtn').onclick = () => {
-  tutupForm();
-  if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.PAUSED) {
-    html5QrCode.resume();
-  }
-};
+$('cancelBtn').onclick = tutupForm;
 $('overlay').onclick = tutupForm;
 
 function onScanSuccess(decodedText) {
+  if (isProcessingScan) return;
+
   if (navigator.vibrate) navigator.vibrate(100);
 
   const dahAda = senarai.find(x => x.barcode === decodedText);
@@ -205,9 +215,8 @@ function onScanSuccess(decodedText) {
   $('msg').textContent = '✅ ' + (memori && memori.nama ? memori.nama : decodedText) + ' ditambah!';
   $('msg').style.color = '#16a34a';
 
-  // Kalau tak ada nama dalam memori, buka borang
   if (!memori || !memori.nama) {
-    if (html5QrCode) html5QrCode.pause();
+    isProcessingScan = true; 
     bukaForm(senarai.length - 1);
   }
 }
@@ -248,23 +257,81 @@ $('resetBtn').onclick = () => {
   }
 };
 
+// ===== FUNGSI BACKUP & IMPORT (MERGE) =====
 $('backupBtn').onclick = () => {
-  if (senarai.length === 0) {
-    alert("Senarai kosong.");
-    return;
-  }
+  $('overlay').classList.add('show');
+  $('backupModal').style.display = 'block';
+};
 
-  const dataSimpan = { tarikh: new Date().toISOString(), senarai: senarai, memoriHarga: dbHarga };
+$('closeBackup').onclick = () => {
+  $('overlay').classList.remove('show');
+  $('backupModal').style.display = 'none';
+};
+
+// Export (Simpan)
+$('exportBtn').onclick = () => {
+  const dataSimpan = { 
+    tarikh: new Date().toISOString(), 
+    senarai: senarai, 
+    memoriHarga: dbHarga 
+  };
   const dataTeks = JSON.stringify(dataSimpan, null, 2);
   const blob = new Blob([dataTeks], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   
   a.href = url;
-  a.download = `senarai-belanja-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `backup-scan-harga-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   
   URL.revokeObjectURL(url);
+  $('closeBackup').click();
+  alert("✅ Fail backup berjaya dimuat turun ke folder Download!");
+};
+
+// Import (Pulihkan & CAMPUR)
+$('fileInput').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const data = JSON.parse(event.target.result);
+      
+      if (!data.memoriHarga) {
+        throw new Error("Fail ini tiada data memori harga.");
+      }
+
+      // CAMPURKAN (MERGE) data memori harga
+      // Fail JSON akan overwrite (ambil alih) harga lama jika ada barcode yang sama
+      for (let barcode in data.memoriHarga) {
+        dbHarga[barcode] = data.memoriHarga[barcode];
+      }
+      
+      localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
+
+      // CAMPURKAN senarai (jika fail tu ada senarai)
+      if (data.senarai && Array.isArray(data.senarai)) {
+        data.senarai.forEach(itemBaru => {
+          // Kalau barang dah ada dalam senarai skrin, jangan tambah dua kali
+          if (!senarai.find(x => x.barcode === itemBaru.barcode)) {
+             senarai.push(itemBaru);
+          }
+        });
+        localStorage.setItem(LS_DATA, JSON.stringify(senarai));
+      }
+      
+      render();
+      $('closeBackup').click();
+      alert("✅ Data berjaya dicampur (Merge)! Harga lama dikekalkan, harga baru ditambah.");
+      
+    } catch (err) {
+      alert("❌ Gagal import: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = ''; 
 };
 
 render();
