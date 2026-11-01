@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Scan Barcode & Harga MyKasih</title>
+<title>Scan Barcode & Harga MyKasih (Cloud)</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -35,7 +35,7 @@
   #list li .info { display:flex; flex-direction:column; flex:1; cursor:pointer; }
   #list li .nm-row { display:flex; align-items:center; gap:6px; }
   #list li .nm { font-size:16px; font-weight:bold; }
-  #list li .badge-mk { font-size: 12px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+  #list li .badge-mk { font-size: 12px; padding: 2px 6px; border-radius: 4px; font-weight:bold; }
   #list li .badge-mk.ok { background: #dcfce7; color: #16a34a; border: 1px solid #16a34a; }
   #list li .badge-mk.no { background: #fee2e2; color: #dc2626; border: 1px solid #dc2626; }
   
@@ -85,7 +85,7 @@
 
 <header>
   <span>🛒 Scan MyKasih</span>
-  <button id="backupBtn">💾 Backup/Import</button>
+  <button id="backupBtn">☁️ Cloud</button>
 </header>
 
 <div class="wrap">
@@ -145,333 +145,348 @@
 </div>
 
 <div id="backupModal">
-  <h3>💾 Backup & Restore</h3>
-  <p style="font-size:13px; color:#52525b; margin-bottom:15px;">Simpan fail ke telefon, atau pulihkan dari fail JSON.</p>
+  <h3>☁️ Cloud Sync (Firebase)</h3>
+  <p style="font-size:13px; color:#52525b; margin-bottom:15px;">Simpan data anda terus ke pangkalan data Google.</p>
   
-  <button class="btn green" id="exportBtn">⬇️ Simpan Fail (Export)</button>
-  <label for="fileInput" class="btn dark" style="display:block; text-align:center; line-height:24px;">⬆️ Import Fail (Tambah Data)</label>
-  <input type="file" id="fileInput" accept=".json,application/json" style="display:none;">
+  <button class="btn green" id="cloudBackupBtn">☁️ Hantar ke Cloud (Backup)</button>
+  <button class="btn dark" id="cloudRestoreBtn" style="margin-top:10px;">⬇️ Ambil dari Cloud (Restore)</button>
   
-  <button class="btn grey" id="closeBackup" style="margin-top:10px;">Tutup</button>
+  <button class="btn grey" id="closeBackup" style="margin-top:15px;">Tutup</button>
 </div>
 
-<script>
-const LS_DATA = 'senarai_barcode';
-const LS_HARGA = 'db_harga';
-const LS_HAD = 'had_mykasih';
+<script type="module">
+  // Firebase Config anda
+  const firebaseConfig = {
+    apiKey: "AIzaSyBzd6TM1HuFwVHbfiJo26p6BfGLskmN_f4",
+    authDomain: "scan-barcode-c31ee.firebaseapp.com",
+    projectId: "scan-barcode-c31ee",
+    storageBucket: "scan-barcode-c31ee.firebasestorage.app",
+    messagingSenderId: "37002311570",
+    appId: "1:37002311570:web:ad4389789125afd45e334b"
+  };
 
-let senarai = JSON.parse(localStorage.getItem(LS_DATA) || '[]');
-let dbHarga = JSON.parse(localStorage.getItem(LS_HARGA) || '{}');
-let hadMyKasih = parseFloat(localStorage.getItem(LS_HAD) || '0');
+  // Kod rahsia anda
+  const KOD_RAHSIA_ANDA = "aremir24"; 
 
-let html5QrCode = null;
-let editIndex = -1;
-let isProcessingScan = false;
+  // --- IMPORT FIREBASE ---
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-const $ = id => document.getElementById(id);
+  const app = initializeApp(firebaseConfig);
+  const dbFirestore = getFirestore(app);
 
-if (hadMyKasih > 0) $('inLimit').value = hadMyKasih;
+  // --- LOGIK APP ---
+  const LS_DATA = 'senarai_barcode';
+  const LS_HARGA = 'db_harga';
+  const LS_HAD = 'had_mykasih';
 
-$('inLimit').oninput = (e) => {
-  hadMyKasih = parseFloat(e.target.value) || 0;
-  localStorage.setItem(LS_HAD, hadMyKasih);
-  render();
-};
+  let senarai = JSON.parse(localStorage.getItem(LS_DATA) || '[]');
+  let dbHarga = JSON.parse(localStorage.getItem(LS_HARGA) || '{}');
+  let hadMyKasih = parseFloat(localStorage.getItem(LS_HAD) || '0');
 
-function render() {
-  const ul = $('list');
-  ul.innerHTML = '';
-  
-  const keyword = $('searchBox').value.toLowerCase().trim();
-  let jumlahHarga = 0;
+  let html5QrCode = null;
+  let editIndex = -1;
+  let isProcessingScan = false;
 
-  const filteredSenarai = senarai.filter(item => {
-      const namaMatch = (item.nama || '').toLowerCase().includes(keyword);
-      const barcodeMatch = item.barcode.includes(keyword);
-      return namaMatch || barcodeMatch;
-  });
+  const $ = id => document.getElementById(id);
 
-  filteredSenarai.forEach((item) => {
-    const realIndex = senarai.indexOf(item);
-    const li = document.createElement('li');
-    if (!item.harga || item.harga <= 0) li.classList.add('no-price');
+  if (hadMyKasih > 0) $('inLimit').value = hadMyKasih;
+
+  $('inLimit').oninput = (e) => {
+    hadMyKasih = parseFloat(e.target.value) || 0;
+    localStorage.setItem(LS_HAD, hadMyKasih);
+    render();
+  };
+
+  function render() {
+    const ul = $('list');
+    ul.innerHTML = '';
     
-    let qty = item.qty || 1;
-    let subtotal = item.harga * qty;
-    let subtotalText = qty > 1 ? `RM ${subtotal.toFixed(2)}` : '';
-    
-    let badgeMK = '';
-    if (item.isMyKasih === true) {
-        badgeMK = `<span class="badge-mk ok">✅ MyKasih</span>`;
-    } else if (item.isMyKasih === false) {
-        badgeMK = `<span class="badge-mk no">❌ Bukan</span>`;
-    }
+    const keyword = $('searchBox').value.toLowerCase().trim();
+    let jumlahHarga = 0;
 
-    li.innerHTML = `
-      <div class="info" onclick="bukaForm(${realIndex})">
-        <div class="nm-row">
-            <span class="nm">${item.nama || '(Belum letak nama)'}</span>
-            ${badgeMK}
-        </div>
-        <span class="bc">${item.barcode}</span>
-      </div>
-      <div class="right-side">
-        <div class="price-box" onclick="bukaForm(${realIndex})">
-            <span class="pr">${item.harga > 0 ? 'RM ' + item.harga.toFixed(2) : 'Set Harga'}</span>
-            <span class="subtotal">${subtotalText}</span>
-        </div>
-        <div class="qty-box">
-            <button class="qty-btn" onclick="ubahQty(${realIndex}, -1)">−</button>
-            <span class="qty-num">${qty}</span>
-            <button class="qty-btn" onclick="ubahQty(${realIndex}, 1)">+</button>
-        </div>
-        <button class="del" onclick="hapus(${realIndex})">✕</button>
-      </div>
-    `;
-    ul.appendChild(li);
-  });
+    const filteredSenarai = senarai.filter(item => {
+        const namaMatch = (item.nama || '').toLowerCase().includes(keyword);
+        const barcodeMatch = item.barcode.includes(keyword);
+        return namaMatch || barcodeMatch;
+    });
 
-  senarai.forEach(item => {
+    filteredSenarai.forEach((item) => {
+      const realIndex = senarai.indexOf(item);
+      const li = document.createElement('li');
+      if (!item.harga || item.harga <= 0) li.classList.add('no-price');
+      
       let qty = item.qty || 1;
-      jumlahHarga += (item.harga * qty);
-  });
+      let subtotal = item.harga * qty;
+      let subtotalText = qty > 1 ? `RM ${subtotal.toFixed(2)}` : '';
+      
+      let badgeMK = '';
+      if (item.isMyKasih === true) {
+          badgeMK = `<span class="badge-mk ok">✅ MyKasih</span>`;
+      } else if (item.isMyKasih === false) {
+          badgeMK = `<span class="badge-mk no">❌ Bukan</span>`;
+      }
 
-  $('totalAmt').textContent = 'RM ' + jumlahHarga.toFixed(2);
-  $('count').textContent = '(' + senarai.length + ' barang)';
-  $('resetBtn').style.display = senarai.length > 0 ? 'block' : 'none';
-  localStorage.setItem(LS_DATA, JSON.stringify(senarai));
+      li.innerHTML = `
+        <div class="info" onclick="bukaForm(${realIndex})">
+          <div class="nm-row">
+              <span class="nm">${item.nama || '(Belum letak nama)'}</span>
+              ${badgeMK}
+          </div>
+          <span class="bc">${item.barcode}</span>
+        </div>
+        <div class="right-side">
+          <div class="price-box" onclick="bukaForm(${realIndex})">
+              <span class="pr">${item.harga > 0 ? 'RM ' + item.harga.toFixed(2) : 'Set Harga'}</span>
+              <span class="subtotal">${subtotalText}</span>
+          </div>
+          <div class="qty-box">
+              <button class="qty-btn" onclick="ubahQty(${realIndex}, -1)">−</button>
+              <span class="qty-num">${qty}</span>
+              <button class="qty-btn" onclick="ubahQty(${realIndex}, 1)">+</button>
+          </div>
+          <button class="del" onclick="hapus(${realIndex})">✕</button>
+        </div>
+      `;
+      ul.appendChild(li);
+    });
 
-  const bakiEl = $('bakiAmt');
-  if (hadMyKasih > 0) {
-      const baki = hadMyKasih - jumlahHarga;
-      bakiEl.textContent = 'RM ' + baki.toFixed(2);
-      if (baki < 0 || baki < 20) bakiEl.className = 'baki-amt baki-low';
-      else bakiEl.className = 'baki-amt baki-ok';
-  } else {
-      bakiEl.textContent = '-';
-      bakiEl.className = 'baki-amt';
-  }
-}
+    senarai.forEach(item => {
+        let qty = item.qty || 1;
+        jumlahHarga += (item.harga * qty);
+    });
 
-window.ubahQty = function(index, perubahan) {
-  let item = senarai[index];
-  if (!item.qty) item.qty = 1; 
-  item.qty += perubahan;
-  if (item.qty <= 0) senarai.splice(index, 1);
-  render();
-}
+    $('totalAmt').textContent = 'RM ' + jumlahHarga.toFixed(2);
+    $('count').textContent = '(' + senarai.length + ' barang)';
+    $('resetBtn').style.display = senarai.length > 0 ? 'block' : 'none';
+    localStorage.setItem(LS_DATA, JSON.stringify(senarai));
 
-window.hapus = function(index) {
-  senarai.splice(index, 1);
-  render();
-}
-
-window.bukaForm = function(index) {
-  editIndex = index;
-  const item = senarai[index];
-  
-  $('inBarcode').value = item.barcode;
-  $('inNama').value = item.nama || '';
-  $('inHarga').value = item.harga > 0 ? item.harga : '';
-  $('inMyKasih').checked = item.isMyKasih || false; 
-  
-  $('overlay').classList.add('show');
-  $('form').style.display = 'block';
-  
-  if (item.nama) $('inHarga').focus();
-  else $('inNama').focus();
-}
-
-$('saveBtn').onclick = () => {
-  const nama = $('inNama').value.trim();
-  const harga = parseFloat($('inHarga').value) || 0;
-  const barcode = $('inBarcode').value;
-  const isMyKasih = $('inMyKasih').checked;
-
-  senarai[editIndex].nama = nama;
-  senarai[editIndex].harga = harga;
-  senarai[editIndex].isMyKasih = isMyKasih;
-
-  if (barcode !== 'manual' && nama !== '') {
-    dbHarga[barcode] = { nama: nama, harga: harga, isMyKasih: isMyKasih };
-    localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
+    const bakiEl = $('bakiAmt');
+    if (hadMyKasih > 0) {
+        const baki = hadMyKasih - jumlahHarga;
+        bakiEl.textContent = 'RM ' + baki.toFixed(2);
+        if (baki < 0 || baki < 20) bakiEl.className = 'baki-amt baki-low';
+        else bakiEl.className = 'baki-amt baki-ok';
+    } else {
+        bakiEl.textContent = '-';
+        bakiEl.className = 'baki-amt';
+    }
   }
 
-  render();
-  tutupForm();
-};
-
-function tutupForm() {
-  $('overlay').classList.remove('show');
-  $('form').style.display = 'none';
-  editIndex = -1;
-  isProcessingScan = false; 
-}
-$('cancelBtn').onclick = tutupForm;
-$('overlay').onclick = tutupForm;
-
-function onScanSuccess(decodedText) {
-  if (isProcessingScan) return;
-
-  if (navigator.vibrate) navigator.vibrate(100);
-
-  const dahAda = senarai.find(x => x.barcode === decodedText);
-  if (dahAda) {
-    $('msg').textContent = '⚠️ Barang dah ada dalam senarai!';
-    $('msg').style.color = '#dc2626';
-    return;
-  }
-
-  const memori = dbHarga[decodedText];
-  
-  let namaBaru = '';
-  let hargaBaru = 0;
-  let isMyKasihBaru = false;
-
-  if (memori && memori.nama) {
-    namaBaru = String(memori.nama).trim();
-    hargaBaru = parseFloat(memori.harga) || 0;
-    isMyKasihBaru = memori.isMyKasih || false;
-  }
-  
-  senarai.push({ 
-    barcode: decodedText, 
-    nama: namaBaru, 
-    harga: hargaBaru,
-    isMyKasih: isMyKasihBaru,
-    qty: 1
-  });
-  
-  render();
-  
-  $('msg').textContent = '✅ ' + (namaBaru ? namaBaru : decodedText) + ' ditambah!';
-  $('msg').style.color = '#16a34a';
-
-  if (namaBaru === '') {
-    isProcessingScan = true; 
-    bukaForm(senarai.length - 1);
-  }
-}
-
-$('startBtn').onclick = async () => {
-  $('startBtn').style.display = 'none';
-  $('reader').style.display = 'block';
-  $('msg').textContent = 'Membuka kamera...';
-
-  html5QrCode = new Html5Qrcode("reader");
-  
-  try {
-    await html5QrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 250, height: 150 } },
-      onScanSuccess
-    );
-    $('msg').textContent = 'Halakan kamera ke barcode...';
-  } catch (err) {
-    $('msg').textContent = 'Kamera gagal: ' + err;
-    $('msg').style.color = '#dc2626';
-    $('reader').style.display = 'none';
-    $('startBtn').style.display = 'block';
-  }
-};
-
-$('manualBtn').onclick = () => {
-  const input = prompt("Masukkan nombor barcode:");
-  if (input && input.trim() !== '') {
-    onScanSuccess(input.trim());
-  }
-};
-
-$('resetBtn').onclick = () => {
-  if(confirm("Kosongkan senarai untuk shopping baru? (Memori harga barang kekal)")) {
-    senarai = [];
-    $('searchBox').value = '';
+  window.ubahQty = function(index, perubahan) {
+    let item = senarai[index];
+    if (!item.qty) item.qty = 1; 
+    item.qty += perubahan;
+    if (item.qty <= 0) senarai.splice(index, 1);
     render();
   }
-};
 
-$('backupBtn').onclick = () => {
-  $('overlay').classList.add('show');
-  $('backupModal').style.display = 'block';
-};
+  window.hapus = function(index) {
+    senarai.splice(index, 1);
+    render();
+  }
 
-$('closeBackup').onclick = () => {
-  $('overlay').classList.remove('show');
-  $('backupModal').style.display = 'none';
-};
+  window.bukaForm = function(index) {
+    editIndex = index;
+    const item = senarai[index];
+    
+    $('inBarcode').value = item.barcode;
+    $('inNama').value = item.nama || '';
+    $('inHarga').value = item.harga > 0 ? item.harga : '';
+    $('inMyKasih').checked = item.isMyKasih || false; 
+    
+    $('overlay').classList.add('show');
+    $('form').style.display = 'block';
+    
+    if (item.nama) $('inHarga').focus();
+    else $('inNama').focus();
+  }
 
-$('exportBtn').onclick = () => {
-  const dataSimpan = { tarikh: new Date().toISOString(), senarai: senarai, memoriHarga: dbHarga, hadMyKasih: hadMyKasih };
-  const dataTeks = JSON.stringify(dataSimpan, null, 2);
-  const blob = new Blob([dataTeks], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  
-  a.href = url;
-  a.download = `backup-scan-harga-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  
-  URL.revokeObjectURL(url);
-  $('closeBackup').click();
-  alert("✅ Fail backup dimuat turun!");
-};
+  $('saveBtn').onclick = () => {
+    const nama = $('inNama').value.trim();
+    const harga = parseFloat($('inHarga').value) || 0;
+    const barcode = $('inBarcode').value;
+    const isMyKasih = $('inMyKasih').checked;
 
-$('fileInput').onchange = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    try {
-      const data = JSON.parse(event.target.result);
-      const dataHarga = data.memoriHarga || data.harga;
+    senarai[editIndex].nama = nama;
+    senarai[editIndex].harga = harga;
+    senarai[editIndex].isMyKasih = isMyKasih;
 
-      if (!dataHarga) throw new Error("Fail ini tiada data harga.");
-
-      let count = 0;
-      for (let barcode in dataHarga) {
-        if (dataHarga[barcode] && dataHarga[barcode].nama) {
-            dbHarga[barcode] = {
-                nama: dataHarga[barcode].nama,
-                harga: parseFloat(dataHarga[barcode].harga) || 0,
-                isMyKasih: dataHarga[barcode].isMyKasih || false
-            };
-            count++;
-        }
-      }
+    if (barcode !== 'manual' && nama !== '') {
+      dbHarga[barcode] = { nama: nama, harga: harga, isMyKasih: isMyKasih };
       localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
+    }
 
-      if (data.senarai && Array.isArray(data.senarai)) {
-        data.senarai.forEach(itemBaru => {
-          if (!senarai.find(x => x.barcode === itemBaru.barcode)) {
-             if (!itemBaru.qty) itemBaru.qty = 1;
-             senarai.push(itemBaru);
-          }
-        });
-        localStorage.setItem(LS_DATA, JSON.stringify(senarai));
-      }
-      
-      if (data.hadMyKasih) {
-          hadMyKasih = data.hadMyKasih;
-          $('inLimit').value = hadMyKasih;
-          localStorage.setItem(LS_HAD, hadMyKasih);
-      }
-      
-      render();
-      $('closeBackup').click();
-      
-      if (count === 0) alert(`⚠️ 0 data harga dijumpai.`);
-      else alert(`✅ Berjaya! ${count} data barang dimasukkan.`);
-      
+    render();
+    tutupForm();
+  };
+
+  function tutupForm() {
+    $('overlay').classList.remove('show');
+    $('form').style.display = 'none';
+    editIndex = -1;
+    isProcessingScan = false; 
+  }
+  $('cancelBtn').onclick = tutupForm;
+  $('overlay').onclick = tutupForm;
+
+  function onScanSuccess(decodedText) {
+    if (isProcessingScan) return;
+
+    if (navigator.vibrate) navigator.vibrate(100);
+
+    const dahAda = senarai.find(x => x.barcode === decodedText);
+    if (dahAda) {
+      $('msg').textContent = '⚠️ Barang dah ada dalam senarai!';
+      $('msg').style.color = '#dc2626';
+      return;
+    }
+
+    const memori = dbHarga[decodedText];
+    
+    let namaBaru = '';
+    let hargaBaru = 0;
+    let isMyKasihBaru = false;
+
+    if (memori && memori.nama) {
+      namaBaru = String(memori.nama).trim();
+      hargaBaru = parseFloat(memori.harga) || 0;
+      isMyKasihBaru = memori.isMyKasih || false;
+    }
+    
+    senarai.push({ 
+      barcode: decodedText, 
+      nama: namaBaru, 
+      harga: hargaBaru,
+      isMyKasih: isMyKasihBaru,
+      qty: 1
+    });
+    
+    render();
+    
+    $('msg').textContent = '✅ ' + (namaBaru ? namaBaru : decodedText) + ' ditambah!';
+    $('msg').style.color = '#16a34a';
+
+    if (namaBaru === '') {
+      isProcessingScan = true; 
+      bukaForm(senarai.length - 1);
+    }
+  }
+
+  $('startBtn').onclick = async () => {
+    $('startBtn').style.display = 'none';
+    $('reader').style.display = 'block';
+    $('msg').textContent = 'Membuka kamera...';
+
+    html5QrCode = new Html5Qrcode("reader");
+    
+    try {
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        onScanSuccess
+      );
+      $('msg').textContent = 'Halakan kamera ke barcode...';
     } catch (err) {
-      alert("❌ Gagal import: " + err.message);
+      $('msg').textContent = 'Kamera gagal: ' + err;
+      $('msg').style.color = '#dc2626';
+      $('reader').style.display = 'none';
+      $('startBtn').style.display = 'block';
     }
   };
-  reader.readAsText(file);
-  e.target.value = ''; 
-};
 
-render();
+  $('manualBtn').onclick = () => {
+    const input = prompt("Masukkan nombor barcode:");
+    if (input && input.trim() !== '') {
+      onScanSuccess(input.trim());
+    }
+  };
+
+  $('resetBtn').onclick = () => {
+    if(confirm("Kosongkan senarai untuk shopping baru? (Memori harga barang kekal)")) {
+      senarai = [];
+      $('searchBox').value = '';
+      render();
+    }
+  };
+
+  $('backupBtn').onclick = () => {
+    $('overlay').classList.add('show');
+    $('backupModal').style.display = 'block';
+  };
+
+  $('closeBackup').onclick = () => {
+    $('overlay').classList.remove('show');
+    $('backupModal').style.display = 'none';
+  };
+
+  // === FUNGSI FIREBASE BACKUP & RESTORE ===
+  $('cloudBackupBtn').onclick = async () => {
+    const btn = $('cloudBackupBtn');
+    btn.textContent = '⏳ Menghantar ke Awan...';
+    btn.disabled = true;
+
+    const dataSimpan = { 
+        senarai: senarai, 
+        memoriHarga: dbHarga, 
+        hadMyKasih: hadMyKasih 
+    };
+
+    try {
+      await setDoc(doc(dbFirestore, "backups", KOD_RAHSIA_ANDA), dataSimpan);
+      alert("✅ Berjaya disimpan ke Cloud Firebase!");
+    } catch (e) {
+      console.error(e);
+      alert("❌ Gagal simpan ke Cloud: " + e.message);
+    } finally {
+      btn.textContent = '☁️ Hantar ke Cloud (Backup)';
+      btn.disabled = false;
+    }
+  };
+
+  $('cloudRestoreBtn').onclick = async () => {
+    const btn = $('cloudRestoreBtn');
+    btn.textContent = '⏳ Mengambil dari Awan...';
+    btn.disabled = true;
+
+    try {
+      const docSnap = await getDoc(doc(dbFirestore, "backups", KOD_RAHSIA_ANDA));
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        
+        if(confirm("Import akan GANTIKAN data semasa. Teruskan?")) {
+            if (data.memoriHarga) {
+                dbHarga = data.memoriHarga;
+                localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
+            }
+            if (data.senarai) {
+                senarai = data.senarai;
+                localStorage.setItem(LS_DATA, JSON.stringify(senarai));
+            }
+            if (data.hadMyKasih) {
+                hadMyKasih = data.hadMyKasih;
+                $('inLimit').value = hadMyKasih;
+                localStorage.setItem(LS_HAD, hadMyKasih);
+            }
+            
+            render();
+            $('closeBackup').click();
+            alert("✅ Data berjaya dipulihkan dari Cloud!");
+        }
+      } else {
+        alert("⚠️ Tiada data cloud dijumpai untuk kod ini.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("❌ Gagal ambil dari Cloud: " + e.message);
+    } finally {
+      btn.textContent = '⬇️ Ambil dari Cloud (Restore)';
+      btn.disabled = false;
+    }
+  };
+
+  render();
 </script>
 </body>
 </html>
