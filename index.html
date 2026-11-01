@@ -3,42 +3,57 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Scan Barcode</title>
-<!-- Pustaka scanner paling stabil untuk mobile -->
+<title>Scan Barcode & Harga</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin:0; font-family: system-ui, sans-serif; background:#f4f4f5; color:#18181b; padding-bottom:80px; }
-  header { background:#18181b; color:#fff; padding:14px 16px; font-weight:600; font-size:18px; }
-  .wrap { padding:16px; }
+  header { background:#18181b; color:#fff; padding:14px 16px; font-weight:600; font-size:18px; display:flex; justify-content:space-between; align-items:center;}
+  header button { background:#16a34a; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-size:14px; cursor:pointer; font-weight:bold;}
   
+  .wrap { padding:16px; }
   .btn { width:100%; padding:16px; font-size:17px; font-weight:600; border:none; border-radius:12px; background:#2563eb; color:#fff; cursor:pointer; margin-bottom:10px;}
   .btn.dark { background:#18181b; }
+  .btn.green { background:#16a34a; }
+  .btn.red { background:#dc2626; }
+  .btn.grey { background:#52525b; }
   .btn:active { opacity:.8; }
 
-  /* Bekas Kamera */
   #reader { width: 100%; display: none; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 10px;}
   #reader video { display: block; width: 100% !important; height: auto !important; }
-
   #msg { font-size:14px; text-align:center; color:#2563eb; font-weight:bold; margin-bottom:10px; min-height: 20px;}
 
-  /* Senarai Barang */
   #list { list-style:none; padding:0; margin:0; }
-  #list li { background:#fff; padding:12px 16px; margin-bottom:8px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid #2563eb; }
-  #list li .info { display:flex; flex-direction:column; }
-  #list li .bc { font-weight:bold; font-size:16px; }
-  #list li .nm { font-size:13px; color:#71717a; }
-  #list li .del { background:none; border:none; color:#dc2626; font-size:20px; cursor:pointer; }
+  #list li { background:#fff; padding:12px 16px; margin-bottom:8px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid #2563eb; cursor:pointer; }
+  #list li .info { display:flex; flex-direction:column; flex:1; }
+  #list li .nm { font-size:16px; font-weight:bold; }
+  #list li .bc { font-size:12px; color:#71717a; }
+  #list li .pr { font-weight:bold; color:#2563eb; font-size:16px; margin-left:10px; }
+  #list li .del { background:none; border:none; color:#dc2626; font-size:20px; cursor:pointer; padding:0 5px; }
+  
+  /* Warna kuning kalau tak ada harga lagi */
+  #list li.no-price { border-left-color: #eab308; }
+  #list li.no-price .pr { color: #eab308; font-size: 14px; font-style: italic;}
 
-  /* Bahagian Bawah (Total) */
-  #total { position:fixed; bottom:0; left:0; right:0; background:#18181b; color:#fff; padding:16px; display:flex; justify-content:space-between; font-weight:bold; font-size:16px;}
+  #total { position:fixed; bottom:0; left:0; right:0; background:#18181b; color:#fff; padding:16px; display:flex; justify-content:space-between; font-weight:bold; font-size:16px; z-index:10;}
+  #total .count { color: #a1a1aa; font-size: 14px;}
+
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:99; }
+  .overlay.show { display:block; }
+  #form { display:none; background:#fff; padding:20px; border-radius:12px; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:90%; max-width:400px; z-index:100; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+  #form h3 { margin:0 0 15px; font-size:18px; }
+  #form label { font-size:13px; font-weight:600; color:#52525b; margin-bottom:4px; display:block; }
+  #form input { width:100%; padding:12px; font-size:16px; border:1px solid #d4d4d8; border-radius:8px; margin-bottom:15px; }
 </style>
 </head>
 <body>
 
-<header>🛒 Scan Barcode</header>
+<header>
+  <span>🛒 Scan Barang</span>
+  <button id="backupBtn">💾 Simpan Senarai</button>
+</header>
 
 <div class="wrap">
-  <!-- Kamera akan buka di sini -->
   <div id="reader"></div>
 
   <p id="msg">Tekan butang di bawah untuk mula scan.</p>
@@ -47,40 +62,71 @@
   <button class="btn dark" id="manualBtn">⌨️ Masukkan Barcode Manual</button>
 
   <hr style="border:0; border-top:1px solid #d4d4d8; margin:20px 0;">
-
   <ul id="list"></ul>
+  
+  <button class="btn red" id="resetBtn" style="margin-top:10px; display:none;">Kosongkan Senarai (Sesi Baru)</button>
 </div>
 
 <div id="total">
-  <span>Jumlah Barang</span>
-  <span id="count">0</span>
+  <span>Senarai Belanja <span class="count" id="count">(0 barang)</span></span>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div id="form">
+  <h3>Maklumat Barang</h3>
+  <label>Barcode</label>
+  <input type="text" id="inBarcode" readonly style="background:#f4f4f5; color:#71717a;">
+  
+  <label>Nama Barang</label>
+  <input type="text" id="inNama" placeholder="cth: Susu 1L">
+  
+  <label>Harga (RM) - Boleh kosongkan dulu</label>
+  <input type="number" id="inHarga" step="0.01" inputmode="decimal" placeholder="0.00">
+  
+  <button class="btn green" id="saveBtn">Simpan</button>
+  <button class="btn grey" id="cancelBtn">Tutup</button>
 </div>
 
 <script>
 const LS_DATA = 'senarai_barcode';
+const LS_HARGA = 'db_harga';
+
 let senarai = JSON.parse(localStorage.getItem(LS_DATA) || '[]');
+let dbHarga = JSON.parse(localStorage.getItem(LS_HARGA) || '{}');
 let html5QrCode = null;
+let editIndex = -1;
 
 const $ = id => document.getElementById(id);
 
-// Fungsi kemaskini paparan
 function render() {
   const ul = $('list');
   ul.innerHTML = '';
-  
+
   senarai.forEach((item, index) => {
     const li = document.createElement('li');
+    // Kalau harga 0, bagi class 'no-price' (warna kuning)
+    if (!item.harga || item.harga <= 0) {
+      li.classList.add('no-price');
+    }
+    
+    li.onclick = (e) => {
+        // Jangan buka form kalau yang ditekan tu butang delete
+        if(e.target.tagName !== 'BUTTON') bukaForm(index);
+    };
+
     li.innerHTML = `
       <div class="info">
+        <span class="nm">${item.nama || '(Belum letak nama)'}</span>
         <span class="bc">${item.barcode}</span>
-        <span class="nm">${item.nama || 'Belum ada nama'}</span>
       </div>
+      <span class="pr">${item.harga > 0 ? 'RM ' + item.harga.toFixed(2) : 'Set Harga'}</span>
       <button class="del" onclick="hapus(${index})">✕</button>
     `;
     ul.appendChild(li);
   });
 
-  $('count').textContent = senarai.length + ' barang';
+  $('count').textContent = '(' + senarai.length + ' barang)';
+  $('resetBtn').style.display = senarai.length > 0 ? 'block' : 'none';
   localStorage.setItem(LS_DATA, JSON.stringify(senarai));
 }
 
@@ -89,28 +135,86 @@ window.hapus = function(index) {
   render();
 }
 
-// Fungsi bila scan berjaya
-function onScanSuccess(decodedText, decodedResult) {
-  // 1. Bunyi getar
+window.bukaForm = function(index) {
+  editIndex = index;
+  const item = senarai[index];
+  
+  $('inBarcode').value = item.barcode;
+  $('inNama').value = item.nama || '';
+  $('inHarga').value = item.harga > 0 ? item.harga : '';
+  
+  $('overlay').classList.add('show');
+  $('form').style.display = 'block';
+  
+  if (item.nama) $('inHarga').focus();
+  else $('inNama').focus();
+}
+
+$('saveBtn').onclick = () => {
+  const nama = $('inNama').value.trim();
+  const harga = parseFloat($('inHarga').value) || 0;
+  const barcode = $('inBarcode').value;
+
+  senarai[editIndex].nama = nama;
+  senarai[editIndex].harga = harga;
+
+  // Simpan ke memori kalau harga diisi (supaya lain kali scan, auto keluar)
+  if (barcode !== 'manual' && harga > 0) {
+    dbHarga[barcode] = { nama, harga };
+    localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
+  }
+
+  render();
+  tutupForm();
+  
+  if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.PAUSED) {
+    html5QrCode.resume();
+  }
+};
+
+function tutupForm() {
+  $('overlay').classList.remove('show');
+  $('form').style.display = 'none';
+  editIndex = -1;
+}
+$('cancelBtn').onclick = () => {
+  tutupForm();
+  if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.PAUSED) {
+    html5QrCode.resume();
+  }
+};
+$('overlay').onclick = tutupForm;
+
+function onScanSuccess(decodedText) {
   if (navigator.vibrate) navigator.vibrate(100);
 
-  // 2. Semak jika dah ada dalam senarai
   const dahAda = senarai.find(x => x.barcode === decodedText);
   if (dahAda) {
-    $('msg').textContent = '⚠️ Barcode ' + decodedText + ' dah ada!';
+    $('msg').textContent = '⚠️ Barang dah ada dalam senarai!';
     $('msg').style.color = '#dc2626';
     return;
   }
 
-  // 3. Tambah ke senarai (Kosongkan nama & harga dulu)
-  senarai.push({ barcode: decodedText, nama: '', harga: 0 });
+  const memori = dbHarga[decodedText];
+  
+  senarai.push({ 
+    barcode: decodedText, 
+    nama: memori ? memori.nama : '', 
+    harga: memori ? memori.harga : 0 
+  });
+  
   render();
   
-  $('msg').textContent = '✅ ' + decodedText + ' berjaya ditambah!';
+  $('msg').textContent = '✅ ' + (memori ? memori.nama : decodedText) + ' ditambah!';
   $('msg').style.color = '#16a34a';
+
+  // Kalau barang baru, pause kamera dan keluar borang
+  if (!memori) {
+    if (html5QrCode) html5QrCode.pause();
+    bukaForm(senarai.length - 1);
+  }
 }
 
-// Mula Kamera
 $('startBtn').onclick = async () => {
   $('startBtn').style.display = 'none';
   $('reader').style.display = 'block';
@@ -119,7 +223,6 @@ $('startBtn').onclick = async () => {
   html5QrCode = new Html5Qrcode("reader");
   
   try {
-    // Mula scanner (auto detect kamera belakang)
     await html5QrCode.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 150 } },
@@ -134,7 +237,6 @@ $('startBtn').onclick = async () => {
   }
 };
 
-// Manual Input (Guna prompt ringkas)
 $('manualBtn').onclick = () => {
   const input = prompt("Masukkan nombor barcode:");
   if (input && input.trim() !== '') {
@@ -142,7 +244,32 @@ $('manualBtn').onclick = () => {
   }
 };
 
-// Jalankan render masa mula buka
+$('resetBtn').onclick = () => {
+  if(confirm("Kosongkan senarai untuk shopping baru? (Memori harga barang kekal)")) {
+    senarai = [];
+    render();
+  }
+};
+
+$('backupBtn').onclick = () => {
+  if (senarai.length === 0) {
+    alert("Senarai kosong.");
+    return;
+  }
+
+  const dataSimpan = { tarikh: new Date().toISOString(), senarai: senarai, memoriHarga: dbHarga };
+  const dataTeks = JSON.stringify(dataSimpan, null, 2);
+  const blob = new Blob([dataTeks], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  
+  a.href = url;
+  a.download = `senarai-belanja-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  
+  URL.revokeObjectURL(url);
+};
+
 render();
 </script>
 </body>
