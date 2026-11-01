@@ -31,7 +31,6 @@
   #list li .pr { font-weight:bold; color:#2563eb; font-size:16px; margin-left:10px; }
   #list li .del { background:none; border:none; color:#dc2626; font-size:20px; cursor:pointer; padding:0 5px; }
   
-  /* Warna kuning kalau tak ada harga lagi */
   #list li.no-price { border-left-color: #eab308; }
   #list li.no-price .pr { color: #eab308; font-size: 14px; font-style: italic;}
 
@@ -104,13 +103,11 @@ function render() {
 
   senarai.forEach((item, index) => {
     const li = document.createElement('li');
-    // Kalau harga 0, bagi class 'no-price' (warna kuning)
     if (!item.harga || item.harga <= 0) {
       li.classList.add('no-price');
     }
     
     li.onclick = (e) => {
-        // Jangan buka form kalau yang ditekan tu butang delete
         if(e.target.tagName !== 'BUTTON') bukaForm(index);
     };
 
@@ -158,8 +155,8 @@ $('saveBtn').onclick = () => {
   senarai[editIndex].nama = nama;
   senarai[editIndex].harga = harga;
 
-  // Simpan ke memori kalau harga diisi (supaya lain kali scan, auto keluar)
-  if (barcode !== 'manual' && harga > 0) {
+  // BETULKAN: Simpan ke memori asalkan nama diisi, walaupun harga kosong
+  if (barcode !== 'manual' && nama !== '') {
     dbHarga[barcode] = { nama, harga };
     localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
   }
@@ -205,11 +202,11 @@ function onScanSuccess(decodedText) {
   
   render();
   
-  $('msg').textContent = '✅ ' + (memori ? memori.nama : decodedText) + ' ditambah!';
+  $('msg').textContent = '✅ ' + (memori && memori.nama ? memori.nama : decodedText) + ' ditambah!';
   $('msg').style.color = '#16a34a';
 
-  // Kalau barang baru, pause kamera dan keluar borang
-  if (!memori) {
+  // Kalau tak ada nama dalam memori, buka borang
+  if (!memori || !memori.nama) {
     if (html5QrCode) html5QrCode.pause();
     bukaForm(senarai.length - 1);
   }
