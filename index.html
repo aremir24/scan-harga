@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Scan Barcode & Harga</title>
+<title>Scan Barcode & Harga MyKasih</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin:0; font-family: system-ui, sans-serif; background:#f4f4f5; color:#18181b; padding-bottom:80px; }
+  body { margin:0; font-family: system-ui, sans-serif; background:#f4f4f5; color:#18181b; padding-bottom:90px; }
   header { background:#18181b; color:#fff; padding:14px 16px; font-weight:600; font-size:18px; display:flex; justify-content:space-between; align-items:center;}
   header button { background:#16a34a; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-size:14px; cursor:pointer; font-weight:bold;}
   
@@ -23,10 +23,22 @@
   #reader video { display: block; width: 100% !important; height: auto !important; }
   #msg { font-size:14px; text-align:center; color:#2563eb; font-weight:bold; margin-bottom:10px; min-height: 20px;}
 
+  #limitBox { background:#fff; padding:12px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border:1px solid #d4d4d8; }
+  #limitBox label { font-size:14px; font-weight:600; color:#52525b; }
+  #inLimit { width:100px; padding:8px; font-size:16px; border:1px solid #d4d4d8; border-radius:6px; text-align:right; font-weight:bold;}
+
+  #searchBox { width: 100%; padding: 12px 16px; font-size: 16px; border: 1px solid #d4d4d8; border-radius: 10px; margin-bottom: 15px; background: #fff; outline: none; }
+  #searchBox:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.2); }
+
   #list { list-style:none; padding:0; margin:0; }
   #list li { background:#fff; padding:12px 16px; margin-bottom:8px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid #2563eb; }
   #list li .info { display:flex; flex-direction:column; flex:1; cursor:pointer; }
+  #list li .nm-row { display:flex; align-items:center; gap:6px; }
   #list li .nm { font-size:16px; font-weight:bold; }
+  #list li .badge-mk { font-size: 12px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+  #list li .badge-mk.ok { background: #dcfce7; color: #16a34a; border: 1px solid #16a34a; }
+  #list li .badge-mk.no { background: #fee2e2; color: #dc2626; border: 1px solid #dc2626; }
+  
   #list li .bc { font-size:12px; color:#71717a; }
   
   #list li .right-side { display:flex; align-items:center; gap:10px; }
@@ -42,8 +54,16 @@
   #list li.no-price { border-left-color: #eab308; }
   #list li.no-price .pr { color: #eab308; font-size: 14px; font-style: italic;}
 
-  #total { position:fixed; bottom:0; left:0; right:0; background:#18181b; color:#fff; padding:16px; display:flex; justify-content:space-between; font-weight:bold; font-size:16px; z-index:10;}
-  #total .count { color: #a1a1aa; font-size: 14px;}
+  #total { position:fixed; bottom:0; left:0; right:0; background:#18181b; color:#fff; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; font-weight:bold; font-size:16px; z-index:10; box-shadow: 0 -5px 15px rgba(0,0,0,0.1);}
+  #total .left-side { display:flex; flex-direction:column; }
+  #total .jml { font-size:18px; color:#fff; }
+  #total .count { color: #a1a1aa; font-size: 12px; font-weight:normal; margin-top:2px;}
+  
+  #total .right-side { display:flex; flex-direction:column; align-items:flex-end; }
+  #total .baki-label { font-size:12px; color:#a1a1aa; font-weight:normal; }
+  #total .baki-amt { font-size:18px; }
+  .baki-ok { color: #4ade80; }
+  .baki-low { color: #f87171; }
 
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:99; }
   .overlay.show { display:block; }
@@ -51,7 +71,11 @@
   #form { display:none; background:#fff; padding:20px; border-radius:12px; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:90%; max-width:400px; z-index:100; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
   #form h3 { margin:0 0 15px; font-size:18px; }
   #form label { font-size:13px; font-weight:600; color:#52525b; margin-bottom:4px; display:block; }
-  #form input { width:100%; padding:12px; font-size:16px; border:1px solid #d4d4d8; border-radius:8px; margin-bottom:15px; }
+  #form input[type="text"], #form input[type="number"] { width:100%; padding:12px; font-size:16px; border:1px solid #d4d4d8; border-radius:8px; margin-bottom:15px; }
+  
+  .checkbox-group { display:flex; align-items:center; gap:10px; margin-bottom:15px; background:#f4f4f5; padding:12px; border-radius:8px; cursor:pointer; }
+  .checkbox-group input { width:20px; height:20px; margin:0; cursor:pointer; }
+  .checkbox-group label { margin:0; font-size:15px; cursor:pointer; color:#18181b; }
 
   #backupModal { display:none; background:#fff; padding:20px; border-radius:12px; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:90%; max-width:400px; z-index:100; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center;}
   #backupModal h3 { margin:0 0 15px; font-size:18px; }
@@ -60,11 +84,17 @@
 <body>
 
 <header>
-  <span>🛒 Scan Barang</span>
+  <span>🛒 Scan MyKasih</span>
   <button id="backupBtn">💾 Backup/Import</button>
 </header>
 
 <div class="wrap">
+  
+  <div id="limitBox">
+    <label>Had MyKasih (RM):</label>
+    <input type="number" id="inLimit" step="1" placeholder="0" inputmode="decimal">
+  </div>
+
   <div id="reader"></div>
 
   <p id="msg">Tekan butang di bawah untuk mula scan.</p>
@@ -73,13 +103,23 @@
   <button class="btn dark" id="manualBtn">⌨️ Masukkan Barcode Manual</button>
 
   <hr style="border:0; border-top:1px solid #d4d4d8; margin:20px 0;">
+  
+  <input type="text" id="searchBox" placeholder="🔍 Cari nama atau barcode..." oninput="render()">
+  
   <ul id="list"></ul>
   
   <button class="btn red" id="resetBtn" style="margin-top:10px; display:none;">Kosongkan Senarai (Sesi Baru)</button>
 </div>
 
 <div id="total">
-  <span>Senarai Belanja <span class="count" id="count">(0 barang)</span></span>
+  <div class="left-side">
+    <span class="jml" id="totalAmt">RM 0.00</span>
+    <span class="count" id="count">(0 barang)</span>
+  </div>
+  <div class="right-side">
+    <span class="baki-label">Baki Had</span>
+    <span class="baki-amt baki-ok" id="bakiAmt">-</span>
+  </div>
 </div>
 
 <div class="overlay" id="overlay"></div>
@@ -94,6 +134,11 @@
   
   <label>Harga (RM) - Boleh kosongkan dulu</label>
   <input type="number" id="inHarga" step="0.01" inputmode="decimal" placeholder="0.00">
+  
+  <div class="checkbox-group">
+    <input type="checkbox" id="inMyKasih">
+    <label for="inMyKasih">✅ Lulus MyKasih (Boleh dibeli)</label>
+  </div>
   
   <button class="btn green" id="saveBtn">Simpan</button>
   <button class="btn grey" id="cancelBtn">Tutup</button>
@@ -113,68 +158,106 @@
 <script>
 const LS_DATA = 'senarai_barcode';
 const LS_HARGA = 'db_harga';
+const LS_HAD = 'had_mykasih';
 
 let senarai = JSON.parse(localStorage.getItem(LS_DATA) || '[]');
 let dbHarga = JSON.parse(localStorage.getItem(LS_HARGA) || '{}');
+let hadMyKasih = parseFloat(localStorage.getItem(LS_HAD) || '0');
+
 let html5QrCode = null;
 let editIndex = -1;
 let isProcessingScan = false;
 
 const $ = id => document.getElementById(id);
 
+if (hadMyKasih > 0) $('inLimit').value = hadMyKasih;
+
+$('inLimit').oninput = (e) => {
+  hadMyKasih = parseFloat(e.target.value) || 0;
+  localStorage.setItem(LS_HAD, hadMyKasih);
+  render();
+};
+
 function render() {
   const ul = $('list');
   ul.innerHTML = '';
+  
+  const keyword = $('searchBox').value.toLowerCase().trim();
+  let jumlahHarga = 0;
 
-  senarai.forEach((item, index) => {
+  const filteredSenarai = senarai.filter(item => {
+      const namaMatch = (item.nama || '').toLowerCase().includes(keyword);
+      const barcodeMatch = item.barcode.includes(keyword);
+      return namaMatch || barcodeMatch;
+  });
+
+  filteredSenarai.forEach((item) => {
+    const realIndex = senarai.indexOf(item);
     const li = document.createElement('li');
-    if (!item.harga || item.harga <= 0) {
-      li.classList.add('no-price');
-    }
+    if (!item.harga || item.harga <= 0) li.classList.add('no-price');
     
     let qty = item.qty || 1;
     let subtotal = item.harga * qty;
     let subtotalText = qty > 1 ? `RM ${subtotal.toFixed(2)}` : '';
+    
+    let badgeMK = '';
+    if (item.isMyKasih === true) {
+        badgeMK = `<span class="badge-mk ok">✅ MyKasih</span>`;
+    } else if (item.isMyKasih === false) {
+        badgeMK = `<span class="badge-mk no">❌ Bukan</span>`;
+    }
 
     li.innerHTML = `
-      <div class="info" onclick="bukaForm(${index})">
-        <span class="nm">${item.nama || '(Belum letak nama)'}</span>
+      <div class="info" onclick="bukaForm(${realIndex})">
+        <div class="nm-row">
+            <span class="nm">${item.nama || '(Belum letak nama)'}</span>
+            ${badgeMK}
+        </div>
         <span class="bc">${item.barcode}</span>
       </div>
-      
       <div class="right-side">
-        <div class="price-box" onclick="bukaForm(${index})">
+        <div class="price-box" onclick="bukaForm(${realIndex})">
             <span class="pr">${item.harga > 0 ? 'RM ' + item.harga.toFixed(2) : 'Set Harga'}</span>
             <span class="subtotal">${subtotalText}</span>
         </div>
-        
         <div class="qty-box">
-            <button class="qty-btn" onclick="ubahQty(${index}, -1)">−</button>
+            <button class="qty-btn" onclick="ubahQty(${realIndex}, -1)">−</button>
             <span class="qty-num">${qty}</span>
-            <button class="qty-btn" onclick="ubahQty(${index}, 1)">+</button>
+            <button class="qty-btn" onclick="ubahQty(${realIndex}, 1)">+</button>
         </div>
-        
-        <button class="del" onclick="hapus(${index})">✕</button>
+        <button class="del" onclick="hapus(${realIndex})">✕</button>
       </div>
     `;
     ul.appendChild(li);
   });
 
+  senarai.forEach(item => {
+      let qty = item.qty || 1;
+      jumlahHarga += (item.harga * qty);
+  });
+
+  $('totalAmt').textContent = 'RM ' + jumlahHarga.toFixed(2);
   $('count').textContent = '(' + senarai.length + ' barang)';
   $('resetBtn').style.display = senarai.length > 0 ? 'block' : 'none';
   localStorage.setItem(LS_DATA, JSON.stringify(senarai));
+
+  const bakiEl = $('bakiAmt');
+  if (hadMyKasih > 0) {
+      const baki = hadMyKasih - jumlahHarga;
+      bakiEl.textContent = 'RM ' + baki.toFixed(2);
+      if (baki < 0 || baki < 20) bakiEl.className = 'baki-amt baki-low';
+      else bakiEl.className = 'baki-amt baki-ok';
+  } else {
+      bakiEl.textContent = '-';
+      bakiEl.className = 'baki-amt';
+  }
 }
 
 window.ubahQty = function(index, perubahan) {
   let item = senarai[index];
   if (!item.qty) item.qty = 1; 
-  
   item.qty += perubahan;
-  
-  if (item.qty <= 0) {
-    senarai.splice(index, 1);
-  }
-  
+  if (item.qty <= 0) senarai.splice(index, 1);
   render();
 }
 
@@ -190,6 +273,7 @@ window.bukaForm = function(index) {
   $('inBarcode').value = item.barcode;
   $('inNama').value = item.nama || '';
   $('inHarga').value = item.harga > 0 ? item.harga : '';
+  $('inMyKasih').checked = item.isMyKasih || false; 
   
   $('overlay').classList.add('show');
   $('form').style.display = 'block';
@@ -202,12 +286,14 @@ $('saveBtn').onclick = () => {
   const nama = $('inNama').value.trim();
   const harga = parseFloat($('inHarga').value) || 0;
   const barcode = $('inBarcode').value;
+  const isMyKasih = $('inMyKasih').checked;
 
   senarai[editIndex].nama = nama;
   senarai[editIndex].harga = harga;
+  senarai[editIndex].isMyKasih = isMyKasih;
 
   if (barcode !== 'manual' && nama !== '') {
-    dbHarga[barcode] = { nama: nama, harga: harga };
+    dbHarga[barcode] = { nama: nama, harga: harga, isMyKasih: isMyKasih };
     localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
   }
 
@@ -240,16 +326,19 @@ function onScanSuccess(decodedText) {
   
   let namaBaru = '';
   let hargaBaru = 0;
+  let isMyKasihBaru = false;
 
   if (memori && memori.nama) {
     namaBaru = String(memori.nama).trim();
     hargaBaru = parseFloat(memori.harga) || 0;
+    isMyKasihBaru = memori.isMyKasih || false;
   }
   
   senarai.push({ 
     barcode: decodedText, 
     nama: namaBaru, 
     harga: hargaBaru,
+    isMyKasih: isMyKasihBaru,
     qty: 1
   });
   
@@ -296,6 +385,7 @@ $('manualBtn').onclick = () => {
 $('resetBtn').onclick = () => {
   if(confirm("Kosongkan senarai untuk shopping baru? (Memori harga barang kekal)")) {
     senarai = [];
+    $('searchBox').value = '';
     render();
   }
 };
@@ -311,7 +401,7 @@ $('closeBackup').onclick = () => {
 };
 
 $('exportBtn').onclick = () => {
-  const dataSimpan = { tarikh: new Date().toISOString(), senarai: senarai, memoriHarga: dbHarga };
+  const dataSimpan = { tarikh: new Date().toISOString(), senarai: senarai, memoriHarga: dbHarga, hadMyKasih: hadMyKasih };
   const dataTeks = JSON.stringify(dataSimpan, null, 2);
   const blob = new Blob([dataTeks], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -336,21 +426,19 @@ $('fileInput').onchange = (e) => {
       const data = JSON.parse(event.target.result);
       const dataHarga = data.memoriHarga || data.harga;
 
-      if (!dataHarga) {
-        throw new Error("Fail ini tiada data harga.");
-      }
+      if (!dataHarga) throw new Error("Fail ini tiada data harga.");
 
       let count = 0;
       for (let barcode in dataHarga) {
         if (dataHarga[barcode] && dataHarga[barcode].nama) {
             dbHarga[barcode] = {
                 nama: dataHarga[barcode].nama,
-                harga: parseFloat(dataHarga[barcode].harga) || 0
+                harga: parseFloat(dataHarga[barcode].harga) || 0,
+                isMyKasih: dataHarga[barcode].isMyKasih || false
             };
             count++;
         }
       }
-      
       localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
 
       if (data.senarai && Array.isArray(data.senarai)) {
@@ -363,14 +451,17 @@ $('fileInput').onchange = (e) => {
         localStorage.setItem(LS_DATA, JSON.stringify(senarai));
       }
       
+      if (data.hadMyKasih) {
+          hadMyKasih = data.hadMyKasih;
+          $('inLimit').value = hadMyKasih;
+          localStorage.setItem(LS_HAD, hadMyKasih);
+      }
+      
       render();
       $('closeBackup').click();
       
-      if (count === 0) {
-          alert(`⚠️ Fail dibaca, tapi 0 data harga dijumpai.`);
-      } else {
-          alert(`✅ Berjaya! ${count} data barang dimasukkan.`);
-      }
+      if (count === 0) alert(`⚠️ 0 data harga dijumpai.`);
+      else alert(`✅ Berjaya! ${count} data barang dimasukkan.`);
       
     } catch (err) {
       alert("❌ Gagal import: " + err.message);
