@@ -24,11 +24,19 @@
   #msg { font-size:14px; text-align:center; color:#2563eb; font-weight:bold; margin-bottom:10px; min-height: 20px;}
 
   #list { list-style:none; padding:0; margin:0; }
-  #list li { background:#fff; padding:12px 16px; margin-bottom:8px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid #2563eb; cursor:pointer; }
-  #list li .info { display:flex; flex-direction:column; flex:1; }
+  #list li { background:#fff; padding:12px 16px; margin-bottom:8px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid #2563eb; }
+  #list li .info { display:flex; flex-direction:column; flex:1; cursor:pointer; }
   #list li .nm { font-size:16px; font-weight:bold; }
   #list li .bc { font-size:12px; color:#71717a; }
-  #list li .pr { font-weight:bold; color:#2563eb; font-size:16px; margin-left:10px; }
+  
+  #list li .right-side { display:flex; align-items:center; gap:10px; }
+  #list li .price-box { display:flex; flex-direction:column; align-items:flex-end; cursor:pointer; }
+  #list li .pr { font-weight:bold; color:#2563eb; font-size:16px; }
+  #list li .subtotal { font-size:11px; color:#71717a; }
+  
+  #list li .qty-box { display:flex; align-items:center; gap:5px; background:#f4f4f5; padding:4px; border-radius:8px;}
+  #list li .qty-btn { background:#d4d4d8; border:none; font-weight:bold; font-size:16px; width:28px; height:28px; border-radius:6px; cursor:pointer; display:flex; justify-content:center; align-items:center; }
+  #list li .qty-num { font-weight:bold; font-size:15px; min-width:20px; text-align:center; }
   #list li .del { background:none; border:none; color:#dc2626; font-size:20px; cursor:pointer; padding:0 5px; }
   
   #list li.no-price { border-left-color: #eab308; }
@@ -124,17 +132,30 @@ function render() {
       li.classList.add('no-price');
     }
     
-    li.onclick = (e) => {
-        if(e.target.tagName !== 'BUTTON') bukaForm(index);
-    };
+    let qty = item.qty || 1;
+    let subtotal = item.harga * qty;
+    let subtotalText = qty > 1 ? `RM ${subtotal.toFixed(2)}` : '';
 
     li.innerHTML = `
-      <div class="info">
+      <div class="info" onclick="bukaForm(${index})">
         <span class="nm">${item.nama || '(Belum letak nama)'}</span>
         <span class="bc">${item.barcode}</span>
       </div>
-      <span class="pr">${item.harga > 0 ? 'RM ' + item.harga.toFixed(2) : 'Set Harga'}</span>
-      <button class="del" onclick="hapus(${index})">✕</button>
+      
+      <div class="right-side">
+        <div class="price-box" onclick="bukaForm(${index})">
+            <span class="pr">${item.harga > 0 ? 'RM ' + item.harga.toFixed(2) : 'Set Harga'}</span>
+            <span class="subtotal">${subtotalText}</span>
+        </div>
+        
+        <div class="qty-box">
+            <button class="qty-btn" onclick="ubahQty(${index}, -1)">−</button>
+            <span class="qty-num">${qty}</span>
+            <button class="qty-btn" onclick="ubahQty(${index}, 1)">+</button>
+        </div>
+        
+        <button class="del" onclick="hapus(${index})">✕</button>
+      </div>
     `;
     ul.appendChild(li);
   });
@@ -142,6 +163,19 @@ function render() {
   $('count').textContent = '(' + senarai.length + ' barang)';
   $('resetBtn').style.display = senarai.length > 0 ? 'block' : 'none';
   localStorage.setItem(LS_DATA, JSON.stringify(senarai));
+}
+
+window.ubahQty = function(index, perubahan) {
+  let item = senarai[index];
+  if (!item.qty) item.qty = 1; 
+  
+  item.qty += perubahan;
+  
+  if (item.qty <= 0) {
+    senarai.splice(index, 1);
+  }
+  
+  render();
 }
 
 window.hapus = function(index) {
@@ -202,7 +236,6 @@ function onScanSuccess(decodedText) {
     return;
   }
 
-  // KUNCI UTAMA: Cari dalam memori, pastikan string tak ada ruang kosong
   const memori = dbHarga[decodedText];
   
   let namaBaru = '';
@@ -216,7 +249,8 @@ function onScanSuccess(decodedText) {
   senarai.push({ 
     barcode: decodedText, 
     nama: namaBaru, 
-    harga: hargaBaru 
+    harga: hargaBaru,
+    qty: 1
   });
   
   render();
@@ -224,7 +258,6 @@ function onScanSuccess(decodedText) {
   $('msg').textContent = '✅ ' + (namaBaru ? namaBaru : decodedText) + ' ditambah!';
   $('msg').style.color = '#16a34a';
 
-  // HANYA keluar popup kalau nama betul-betul tiada/kosong
   if (namaBaru === '') {
     isProcessingScan = true; 
     bukaForm(senarai.length - 1);
@@ -267,7 +300,6 @@ $('resetBtn').onclick = () => {
   }
 };
 
-// ===== FUNGSI BACKUP & IMPORT =====
 $('backupBtn').onclick = () => {
   $('overlay').classList.add('show');
   $('backupModal').style.display = 'block';
@@ -302,8 +334,6 @@ $('fileInput').onchange = (e) => {
   reader.onload = (event) => {
     try {
       const data = JSON.parse(event.target.result);
-      
-      // Baca format baru (memoriHarga) atau format lama (harga)
       const dataHarga = data.memoriHarga || data.harga;
 
       if (!dataHarga) {
@@ -326,6 +356,7 @@ $('fileInput').onchange = (e) => {
       if (data.senarai && Array.isArray(data.senarai)) {
         data.senarai.forEach(itemBaru => {
           if (!senarai.find(x => x.barcode === itemBaru.barcode)) {
+             if (!itemBaru.qty) itemBaru.qty = 1;
              senarai.push(itemBaru);
           }
         });
@@ -336,7 +367,7 @@ $('fileInput').onchange = (e) => {
       $('closeBackup').click();
       
       if (count === 0) {
-          alert(`⚠️ Fail dibaca, tapi 0 data harga dijumpai. Pastikan anda pilih fail JSON yang betul.`);
+          alert(`⚠️ Fail dibaca, tapi 0 data harga dijumpai.`);
       } else {
           alert(`✅ Berjaya! ${count} data barang dimasukkan.`);
       }
