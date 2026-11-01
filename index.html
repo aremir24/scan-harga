@@ -1,203 +1,149 @@
 <!DOCTYPE html>
 <html lang="ms">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Shopping & Budget Scanner</title>
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://unpkg.com"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scan Barcode</title>
+<!-- Pustaka scanner paling stabil untuk mobile -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  body { margin:0; font-family: system-ui, sans-serif; background:#f4f4f5; color:#18181b; padding-bottom:80px; }
+  header { background:#18181b; color:#fff; padding:14px 16px; font-weight:600; font-size:18px; }
+  .wrap { padding:16px; }
+  
+  .btn { width:100%; padding:16px; font-size:17px; font-weight:600; border:none; border-radius:12px; background:#2563eb; color:#fff; cursor:pointer; margin-bottom:10px;}
+  .btn.dark { background:#18181b; }
+  .btn:active { opacity:.8; }
+
+  /* Bekas Kamera */
+  #reader { width: 100%; display: none; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 10px;}
+  #reader video { display: block; width: 100% !important; height: auto !important; }
+
+  #msg { font-size:14px; text-align:center; color:#2563eb; font-weight:bold; margin-bottom:10px; min-height: 20px;}
+
+  /* Senarai Barang */
+  #list { list-style:none; padding:0; margin:0; }
+  #list li { background:#fff; padding:12px 16px; margin-bottom:8px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid #2563eb; }
+  #list li .info { display:flex; flex-direction:column; }
+  #list li .bc { font-weight:bold; font-size:16px; }
+  #list li .nm { font-size:13px; color:#71717a; }
+  #list li .del { background:none; border:none; color:#dc2626; font-size:20px; cursor:pointer; }
+
+  /* Bahagian Bawah (Total) */
+  #total { position:fixed; bottom:0; left:0; right:0; background:#18181b; color:#fff; padding:16px; display:flex; justify-content:space-between; font-weight:bold; font-size:16px;}
+</style>
 </head>
-<body class="bg-gray-100 font-sans pb-28">
+<body>
 
-    <!-- Header & Tetapan Bajet -->
-    <header class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md">
-        <div class="max-w-md mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold">🛒 UrusBajet Web</h1>
-            <div class="flex items-center space-x-2">
-                <span class="text-sm font-medium">Bajet: RM</span>
-                <input type="number" id="budgetInput" value="100" class="w-20 bg-blue-700 text-white font-bold px-2 py-1 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-300" onchange="kemaskiniKiraan()">
-            </div>
-        </div>
-    </header>
+<header>🛒 Scan Barcode</header>
 
-    <main class="max-w-md mx-auto p-4 space-y-4">
-        <!-- Status Data -->
-        <div id="syncStatus" class="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium text-center shadow-xs">
-            🔄 Memuatkan data produk.json...
-        </div>
+<div class="wrap">
+  <!-- Kamera akan buka di sini -->
+  <div id="reader"></div>
 
-        <!-- Rumusan Perbelanjaan -->
-        <div class="bg-white p-4 rounded-xl shadow-sm grid grid-cols-2 gap-4 text-center">
-            <div class="border-r border-gray-100">
-                <p class="text-xs text-gray-500 uppercase font-semibold">Jumlah Guna</p>
-                <p class="text-xl font-bold text-gray-800" id="totalBelanja">RM 0.00</p>
-            </div>
-            <div>
-                <p class="text-xs text-gray-500 uppercase font-semibold">Baki Bajet</p>
-                <p class="text-xl font-bold text-green-600" id="bakiBajet">RM 100.00</p>
-            </div>
-        </div>
+  <p id="msg">Tekan butang di bawah untuk mula scan.</p>
 
-        <!-- Ruang Kamera Pengimbas -->
-        <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
-            <h2 class="text-sm font-bold text-gray-700 flex items-center justify-between">
-                <span>📷 Pengimbas Kamera</span>
-                <span id="scanStatus" class="text-xs text-gray-400 font-normal">Kamera ditutup</span>
-            </h2>
-            <div id="reader" class="overflow-hidden rounded-lg bg-gray-50 border-2 border-dashed border-gray-200"></div>
-            <button onclick="mulakanKamera()" id="btnKamera" class="w-full bg-blue-600 text-white font-medium py-2.5 rounded-lg shadow-sm hover:bg-blue-700 transition">
-                Buka Kamera Pengimbas
-            </button>
-        </div>
+  <button class="btn" id="startBtn">📷 Mula Scan Kamera</button>
+  <button class="btn dark" id="manualBtn">⌨️ Masukkan Barcode Manual</button>
 
-        <!-- Senarai Bakul Belanja -->
-        <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
-            <h2 class="text-sm font-bold text-gray-700">🛒 Isi Bakul Anda</h2>
-            <div id="senaraiBakul" class="divide-y divide-gray-100 max-h-60 overflow-y-auto pr-1">
-                <p class="text-center text-sm text-gray-400 py-6">Bakul masih kosong. Mula mengimbas barang!</p>
-            </div>
-        </div>
+  <hr style="border:0; border-top:1px solid #d4d4d8; margin:20px 0;">
 
-        <!-- PUSAT BACKUP DATA BARU -->
-        <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
-            <h2 class="text-sm font-bold text-gray-700">💾 Pengurusan Sandaran (Backup)</h2>
-            <p class="text-xs text-gray-500">Salin kod JSON di bawah dan tampal ke fail <code class="bg-gray-100 px-1 py-0.5 rounded text-red-600">produk.json</code> di GitHub anda untuk simpanan kekal.</p>
-            <button onclick="janaTeksBackup()" class="w-full bg-emerald-600 text-white font-medium py-2 rounded-lg text-sm shadow-sm hover:bg-emerald-700 transition">
-                Jana & Salin Kod JSON Terkini
-            </button>
-            <textarea id="outputBackup" class="w-full h-24 bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs font-mono text-gray-600 focus:outline-none" placeholder="Klik butang di atas untuk jana kod teks backup..." readonly></textarea>
-        </div>
-    </main>
+  <ul id="list"></ul>
+</div>
 
-    <!-- POP-UP MODAL: DAFTAR BARANG BARU -->
-    <div id="modalDaftar" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white w-full max-w-sm rounded-2xl p-6 space-y-4 shadow-xl">
-            <div>
-                <h3 class="text-lg font-bold text-gray-800">Barang Baharu Dikesan! ✨</h3>
-                <p class="text-xs text-gray-500 mt-1">Masukkan maklumat barang untuk dimasukkan ke dalam bakul.</p>
-            </div>
-            <div class="space-y-3">
-                <div>
-                    <label class="text-xs font-semibold text-gray-600 block mb-1">Kod Bar (Barcode)</label>
-                    <input type="text" id="newBarcode" class="w-full bg-gray-100 text-gray-500 px-3 py-2 rounded-lg border border-gray-200 text-sm" readonly>
-                </div>
-                <div>
-                    <label class="text-xs font-semibold text-gray-600 block mb-1">Nama Barang Dapur</label>
-                    <input type="text" id="newName" placeholder="Contoh: Kicap Jalen 500ml" class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                    <label class="text-xs font-semibold text-gray-600 block mb-1">Harga Seunit (RM)</label>
-                    <input type="number" step="0.01" id="newPrice" placeholder="0.00" class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-            </div>
-            <div class="flex space-x-3 pt-2">
-                <button onclick="tutupModal()" class="w-1/2 bg-gray-100 text-gray-600 font-medium py-2 rounded-lg text-sm hover:bg-gray-200">Batal</button>
-                <button onclick="simpanDanTambahBarang()" class="w-1/2 bg-blue-600 text-white font-medium py-2 rounded-lg text-sm hover:bg-blue-700 shadow-sm">Simpan & Masuk Bakul</button>
-            </div>
-        </div>
-    </div>
+<div id="total">
+  <span>Jumlah Barang</span>
+  <span id="count">0</span>
+</div>
 
-    <script>
-        let html5QrcodeScanner = null;
-        let bakulBelanja = [];
+<script>
+const LS_DATA = 'senarai_barcode';
+let senarai = JSON.parse(localStorage.getItem(LS_DATA) || '[]');
+let html5QrCode = null;
 
-        // 1. MEMUATKAN DATA DARI GITHUB KETIKA SKRIN DIBUKA
-        window.onload = function() {
-            fetch('produk.json')
-                .then(response => response.json())
-                .then(data => {
-                    data.forEach(item => {
-                        // Simpan senarai induk ke dalam local storage telefon jika belum wujud
-                        if (!localStorage.getItem("prod_" + item.barcode)) {
-                            localStorage.setItem("prod_" + item.barcode, JSON.stringify(item));
-                        }
-                    });
-                    document.getElementById('syncStatus').className = "bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium text-center shadow-xs";
-                    document.getElementById('syncStatus').innerText = "✅ Senarai induk produk.json berjaya dimuat!";
-                })
-                .catch(err => {
-                    document.getElementById('syncStatus').className = "bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-lg text-xs font-medium text-center shadow-xs";
-                    document.getElementById('syncStatus').innerText = "⚠️ Tiada fail induk produk.json dikesan. Menggunakan memori sedia ada.";
-                });
-        };
+const $ = id => document.getElementById(id);
 
-        // 2. KAWALAN KAMERA IMBAHAN
-        function mulakanKamera() {
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear();
-                html5QrcodeScanner = null;
-                document.getElementById('btnKamera').innerText = "Buka Kamera Pengimbas";
-                document.getElementById('scanStatus').innerText = "Kamera ditutup";
-                return;
-            }
-            document.getElementById('scanStatus').innerText = "Mencari kamera...";
-            html5QrcodeScanner = new Html5Qrcode("reader");
-            html5QrcodeScanner.start(
-                { facingMode: "environment" }, 
-                { fps: 10, qrbox: { width: 250, height: 150 } },
-                onScanSuccess
-            ).then(() => {
-                document.getElementById('btnKamera').innerText = "Tutup Kamera";
-                document.getElementById('scanStatus').innerText = "Mengimbas...";
-            }).catch(err => {
-                alert("Sila benarkan akses kamera telefon.");
-            });
-        }
+// Fungsi kemaskini paparan
+function render() {
+  const ul = $('list');
+  ul.innerHTML = '';
+  
+  senarai.forEach((item, index) => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <div class="info">
+        <span class="bc">${item.barcode}</span>
+        <span class="nm">${item.nama || 'Belum ada nama'}</span>
+      </div>
+      <button class="del" onclick="hapus(${index})">✕</button>
+    `;
+    ul.appendChild(li);
+  });
 
-        // 3. SELEPAS BERJAYA SCAN
-        function onScanSuccess(decodedText, decodedResult) {
-            navigator.vibrate ? navigator.vibrate(100) : null; 
-            let produkWujud = localStorage.getItem("prod_" + decodedText);
-
-            if (produkWujud) {
-                tambahKeBakul(JSON.parse(produkWujud));
-            } else {
-                if (html5QrcodeScanner) html5QrcodeScanner.pause(true);
-                document.getElementById('newBarcode').value = decodedText;
-                document.getElementById('newName').value = "";
-                document.getElementById('newPrice').value = "";
-                document.getElementById('modalDaftar').classList.remove('hidden');
-            }
-        }
-
-        // 4. DAFTAR & SIMPAN BARANG BARU KELUARAN POP-UP
-        function simpanDanTambahBarang() {
-            let barcode = document.getElementById('newBarcode').value;
-            let nama = document.getElementById('newName').value.trim();
-            let harga = parseFloat(document.getElementById('newPrice').value);
-
-            if (!nama || isNaN(harga) || harga <= 0) {
-                alert("Sila isi maklumat dengan lengkap.");
-                return;
-            }
-
-            let produkBaru = { barcode: barcode, nama: nama, harga: harga };
-            localStorage.setItem("prod_" + barcode, JSON.stringify(produkBaru));
-            tambahKeBakul(produkBaru);
-            tutupModal();
-        }
-
-        function tutupModal() {
-            document.getElementById('modalDaftar').classList.add('hidden');
-            if (html5QrcodeScanner) html5QrcodeScanner.resume();
-        }
-red-600";
-} else {
-elementBaki.className = "text-xl font-bold text-green-600";
+  $('count').textContent = senarai.length + ' barang';
+  localStorage.setItem(LS_DATA, JSON.stringify(senarai));
 }
+
+window.hapus = function(index) {
+  senarai.splice(index, 1);
+  render();
 }
-// 6. JANA TEXT JSON UNTUK DIKEMAS KINI KE GITHUB
-function janaTeksBackup() {
-let senaraiPenuh = [];
-for (let i = 0; i < localStorage.length; i++) {
-let key = localStorage.key(i);
-if (key.startsWith("prod_")) {
-senaraiPenuh.push(JSON.parse(localStorage.getItem(key)));
+
+// Fungsi bila scan berjaya
+function onScanSuccess(decodedText, decodedResult) {
+  // 1. Bunyi getar
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  // 2. Semak jika dah ada dalam senarai
+  const dahAda = senarai.find(x => x.barcode === decodedText);
+  if (dahAda) {
+    $('msg').textContent = '⚠️ Barcode ' + decodedText + ' dah ada!';
+    $('msg').style.color = '#dc2626';
+    return;
+  }
+
+  // 3. Tambah ke senarai (Kosongkan nama & harga dulu)
+  senarai.push({ barcode: decodedText, nama: '', harga: 0 });
+  render();
+  
+  $('msg').textContent = '✅ ' + decodedText + ' berjaya ditambah!';
+  $('msg').style.color = '#16a34a';
 }
-}
-let teksJSON = JSON.stringify(senaraiPenuh, null, 2);
-document.getElementById('outputBackup').value = teksJSON;
-// Auto copy ke clipboard telefon/komputer
-navigator.clipboard.writeText(teksJSON);
-alert("Kod JSON berjaya dijana dan DISALIN (Copied)! Anda cuma perlu paste ke fail produk.json di GitHub.");
-}
+
+// Mula Kamera
+$('startBtn').onclick = async () => {
+  $('startBtn').style.display = 'none';
+  $('reader').style.display = 'block';
+  $('msg').textContent = 'Membuka kamera...';
+
+  html5QrCode = new Html5Qrcode("reader");
+  
+  try {
+    // Mula scanner (auto detect kamera belakang)
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 150 } },
+      onScanSuccess
+    );
+    $('msg').textContent = 'Halakan kamera ke barcode...';
+  } catch (err) {
+    $('msg').textContent = 'Kamera gagal: ' + err;
+    $('msg').style.color = '#dc2626';
+    $('reader').style.display = 'none';
+    $('startBtn').style.display = 'block';
+  }
+};
+
+// Manual Input (Guna prompt ringkas)
+$('manualBtn').onclick = () => {
+  const input = prompt("Masukkan nombor barcode:");
+  if (input && input.trim() !== '') {
+    onScanSuccess(input.trim());
+  }
+};
+
+// Jalankan render masa mula buka
+render();
+</script>
+</body>
+</html>
