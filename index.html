@@ -176,24 +176,28 @@ async function startScan() {
   try {
     codeReader = new ZXing.BrowserMultiFormatReader();
 
-    // Cara baru: guna navigator.mediaDevices untuk cari kamera belakang
+    // 1. Minta kebenaran kamera terlebih dahulu (wajib, jika tidak label peranti akan kosong)
+    await navigator.mediaDevices.getUserMedia({ video: true });
+
+    // 2. Senaraikan semua peranti input video
     const devices = await navigator.mediaDevices.enumerateDevices();
     const videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+    // 3. Cuba pilih kamera belakang, jika tiada pilih yang terakhir
+    let deviceId = undefined;
     const back = videoDevices.find(d => /back|rear|environment/i.test(d.label)) || videoDevices[videoDevices.length - 1];
+    if (back) deviceId = back.deviceId;
 
-    // Jika tiada deviceId, biar ZXing pilih kamera default
-    const deviceId = back ? back.deviceId : undefined;
-
+    // 4. Mula mengimbas (jika deviceId undefined, ZXing akan pilih kamera utama secara automatik)
     await codeReader.decodeFromVideoDevice(deviceId, 'viewer', (res) => {
       if (res) onScan(res.getText());
     });
 
     $('msg').textContent = 'Halakan kamera ke kod bar...';
   } catch (e) {
-    $('msg').textContent = 'Kamera gagal: ' + e.message + ' (perlu HTTPS)';
+    $('msg').textContent = 'Kamera gagal: ' + e.message;
     $('viewer').style.display = 'none';
   }
-}
 }
 
 function stopScan() {
