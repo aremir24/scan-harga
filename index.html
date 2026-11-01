@@ -175,16 +175,25 @@ async function startScan() {
   $('viewer').style.display = 'block';
   try {
     codeReader = new ZXing.BrowserMultiFormatReader();
-    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
-    const back = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
-    await codeReader.decodeFromVideoDevice(back.deviceId, 'viewer', (res) => {
+
+    // Cara baru: guna navigator.mediaDevices untuk cari kamera belakang
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    const back = videoDevices.find(d => /back|rear|environment/i.test(d.label)) || videoDevices[videoDevices.length - 1];
+
+    // Jika tiada deviceId, biar ZXing pilih kamera default
+    const deviceId = back ? back.deviceId : undefined;
+
+    await codeReader.decodeFromVideoDevice(deviceId, 'viewer', (res) => {
       if (res) onScan(res.getText());
     });
+
     $('msg').textContent = 'Halakan kamera ke kod bar...';
   } catch (e) {
     $('msg').textContent = 'Kamera gagal: ' + e.message + ' (perlu HTTPS)';
     $('viewer').style.display = 'none';
   }
+}
 }
 
 function stopScan() {
