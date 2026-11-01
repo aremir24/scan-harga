@@ -172,7 +172,6 @@ $('saveBtn').onclick = () => {
   senarai[editIndex].nama = nama;
   senarai[editIndex].harga = harga;
 
-  // Simpan ke memori
   if (barcode !== 'manual' && nama !== '') {
     dbHarga[barcode] = { nama: nama, harga: harga };
     localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
@@ -192,12 +191,10 @@ $('cancelBtn').onclick = tutupForm;
 $('overlay').onclick = tutupForm;
 
 function onScanSuccess(decodedText) {
-  // Kalau tengah process popup, jangan scan
   if (isProcessingScan) return;
 
   if (navigator.vibrate) navigator.vibrate(100);
 
-  // Semak kalau dah ada dalam senarai semasa
   const dahAda = senarai.find(x => x.barcode === decodedText);
   if (dahAda) {
     $('msg').textContent = '⚠️ Barang dah ada dalam senarai!';
@@ -205,13 +202,17 @@ function onScanSuccess(decodedText) {
     return;
   }
 
-  // Ambil data dari memori (memoriHarga)
+  // KUNCI UTAMA: Cari dalam memori, pastikan string tak ada ruang kosong
   const memori = dbHarga[decodedText];
   
-  let namaBaru = memori && memori.nama ? String(memori.nama).trim() : '';
-  let hargaBaru = memori && memori.harga ? parseFloat(memori.harga) : 0;
+  let namaBaru = '';
+  let hargaBaru = 0;
+
+  if (memori && memori.nama) {
+    namaBaru = String(memori.nama).trim();
+    hargaBaru = parseFloat(memori.harga) || 0;
+  }
   
-  // Masukkan ke senarai
   senarai.push({ 
     barcode: decodedText, 
     nama: namaBaru, 
@@ -223,7 +224,7 @@ function onScanSuccess(decodedText) {
   $('msg').textContent = '✅ ' + (namaBaru ? namaBaru : decodedText) + ' ditambah!';
   $('msg').style.color = '#16a34a';
 
-  // KALAU NAMA KOSONG BARU KELUAR POPUP
+  // HANYA keluar popup kalau nama betul-betul tiada/kosong
   if (namaBaru === '') {
     isProcessingScan = true; 
     bukaForm(senarai.length - 1);
@@ -302,21 +303,19 @@ $('fileInput').onchange = (e) => {
     try {
       const data = JSON.parse(event.target.result);
       
-      // Support format lama (harga) dan format baru (memoriHarga)
+      // Baca format baru (memoriHarga) atau format lama (harga)
       const dataHarga = data.memoriHarga || data.harga;
 
       if (!dataHarga) {
         throw new Error("Fail ini tiada data harga.");
       }
 
-      // CAMPURKAN (MERGE) data memori harga
       let count = 0;
       for (let barcode in dataHarga) {
-        // Pastikan format betul
         if (dataHarga[barcode] && dataHarga[barcode].nama) {
             dbHarga[barcode] = {
                 nama: dataHarga[barcode].nama,
-                harga: dataHarga[barcode].harga || 0
+                harga: parseFloat(dataHarga[barcode].harga) || 0
             };
             count++;
         }
@@ -324,7 +323,6 @@ $('fileInput').onchange = (e) => {
       
       localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
 
-      // CAMPURKAN senarai jika ada
       if (data.senarai && Array.isArray(data.senarai)) {
         data.senarai.forEach(itemBaru => {
           if (!senarai.find(x => x.barcode === itemBaru.barcode)) {
@@ -336,7 +334,12 @@ $('fileInput').onchange = (e) => {
       
       render();
       $('closeBackup').click();
-      alert(`✅ Berjaya! ${count} data barang dimasukkan ke dalam memori.`);
+      
+      if (count === 0) {
+          alert(`⚠️ Fail dibaca, tapi 0 data harga dijumpai. Pastikan anda pilih fail JSON yang betul.`);
+      } else {
+          alert(`✅ Berjaya! ${count} data barang dimasukkan.`);
+      }
       
     } catch (err) {
       alert("❌ Gagal import: " + err.message);
