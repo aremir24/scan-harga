@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Scan Harga</title>
+<title>Ambil Barcode</title>
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin:0; font-family: system-ui, sans-serif; background:#f4f4f5; color:#18181b; padding-bottom:90px; }
   header { background:#18181b; color:#fff; padding:14px 16px; font-weight:600; font-size:18px; display:flex; justify-content:space-between; align-items:center; }
   header button { background:#3f3f46; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-size:13px; cursor:pointer; }
-  #viewer { width:100%; max-height:60vh; background:#000; display:none; }
+  #viewer { width:100%; max-height:50vh; background:#000; display:none; }
   #viewer video { width:100%; height:auto; display:block; }
   .wrap { padding:16px; }
   .btn { width:100%; padding:16px; font-size:17px; font-weight:600; border:none; border-radius:12px; background:#2563eb; color:#fff; cursor:pointer; }
@@ -20,60 +20,80 @@
   .btn:active { opacity:.8; }
   .row { display:flex; gap:8px; margin-top:8px; }
   .row .btn { padding:12px; font-size:14px; }
+  
   #list { list-style:none; padding:0; margin:16px 0; }
-  #list li { background:#fff; border-radius:10px; padding:12px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
-  #list li .nm { flex:1; font-size:15px; }
-  #list li .pr { font-weight:600; color:#2563eb; white-space:nowrap; }
+  #list li { background:#fff; border-radius:10px; padding:12px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; border-left: 5px solid #eab308; cursor:pointer; }
+  #list li .info { flex:1; display:flex; flex-direction:column; gap:4px; }
+  #list li .nm { font-size:15px; font-weight:600; color: #71717a; font-style: italic; }
+  #list li .bc { font-size:14px; font-weight:bold; color: #18181b; }
   #list li .del { background:none; border:none; color:#dc2626; font-size:20px; cursor:pointer; padding:0 4px; }
-  #total { position:fixed; bottom:0; left:0; right:0; background:#18181b; color:#fff; padding:14px 16px; display:flex; justify-content:space-between; font-size:18px; font-weight:700; }
-  #total small { display:block; font-size:12px; font-weight:400; color:#a1a1aa; }
-  #form { display:none; background:#fff; padding:16px; border-radius:12px; margin-top:12px; }
+
+  #total { position:fixed; bottom:0; left:0; right:0; background:#18181b; color:#fff; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; font-size:16px; font-weight:700; }
+  #total small { font-size:12px; font-weight:400; color:#a1a1aa; display: block;}
+  
+  #form { display:none; background:#fff; padding:16px; border-radius:12px; margin-top:12px; border: 2px solid #2563eb; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:90%; max-width:400px; z-index:100; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
   #form input { width:100%; padding:12px; font-size:16px; border:1px solid #d4d4d8; border-radius:8px; margin-bottom:10px; }
-  #form label { font-size:13px; color:#71717a; }
-  #msg { font-size:13px; color:#71717a; margin-top:8px; }
+  #form label { font-size:13px; color:#71717a; font-weight:600; }
+  #msg { font-size:13px; color:#71717a; margin-top:8px; min-height: 18px; text-align:center; font-weight:bold; color: #16a34a;}
   .hidden { display:none !important; }
-  .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:20px; z-index:99; }
+  
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; z-index:99; }
+  .overlay.show { display:block; }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:20px; z-index:101; }
   .modal.show { display:flex; }
   .modal-box { background:#fff; border-radius:14px; padding:20px; width:100%; max-width:420px; }
-  .modal-box h3 { margin:0 0 12px; font-size:17px; }
-  .modal-box p { font-size:13px; color:#52525b; margin:0 0 14px; }
 </style>
 </head>
 <body>
 
 <header>
-  <span>🛒 Scan Harga</span>
+  <span>🛒 Ambil Barcode</span>
   <button id="backupBtn">💾 Backup</button>
 </header>
 
 <div id="viewer"></div>
 
 <div class="wrap">
-  <button class="btn" id="scanBtn">📷 Scan Kod Bar</button>
-
-  <div id="form">
-    <label>Nama barang</label>
-    <input type="text" id="inNama" placeholder="cth: Susu 1L">
-    <label>Harga (RM)</label>
-    <input type="number" id="inHarga" step="0.01" inputmode="decimal" placeholder="0.00">
-    <button class="btn" id="saveBtn">Simpan & Tambah</button>
-    <button class="btn grey" id="cancelBtn" style="margin-top:8px">Batal</button>
+  <div class="row">
+    <button class="btn" id="scanBtn">📷 Mula Scan</button>
+    <button class="btn grey" id="stopBtn" style="flex:1; display:none;">🛑 Stop</button>
+    <button class="btn dark" id="manualBtn" style="flex:1">⌨️ Manual</button>
   </div>
 
   <p id="msg"></p>
   <ul id="list"></ul>
-  <button class="btn red hidden" id="resetBtn">Reset Senarai</button>
+  <button class="btn red hidden" id="resetBtn" style="margin-bottom: 20px;">Reset Senarai</button>
 </div>
 
 <div id="total">
-  <span>Jumlah <small id="count">0 barang</small></span>
-  <span id="totalAmt">RM 0.00</span>
+  <span>Jumlah Barang <small id="count">0 barang</small></span>
+  <span style="font-size: 14px; color: #a1a1aa;">Klik barang untuk isi harga</span>
 </div>
 
+<div class="overlay" id="overlay"></div>
+
+<!-- Borang Isi Harga -->
+<div id="form">
+  <h3 style="margin:0 0 12px; font-size:16px;">Isi Maklumat Barang</h3>
+  <input type="hidden" id="editIndex">
+  
+  <label>Barcode</label>
+  <input type="text" id="inBarcode" readonly style="background:#f4f4f5; color:#18181b; font-weight:bold;">
+  
+  <label>Nama Barang (Opsional)</label>
+  <input type="text" id="inNama" placeholder="cth: Susu 1L">
+  
+  <label>Harga (RM)</label>
+  <input type="number" id="inHarga" step="0.01" inputmode="decimal" placeholder="0.00">
+  
+  <button class="btn green" id="saveBtn">Simpan Harga</button>
+  <button class="btn grey" id="cancelBtn" style="margin-top:8px">Tutup</button>
+</div>
+
+<!-- Modal Backup -->
 <div class="modal" id="backupModal">
   <div class="modal-box">
     <h3>💾 Backup & Restore</h3>
-    <p>Export = simpan fail JSON (harga + senarai). Import = pulih dari fail.</p>
     <button class="btn green" id="exportBtn">⬇️ Export JSON</button>
     <div class="row">
       <button class="btn grey" id="importBtn">⬆️ Import JSON</button>
@@ -90,28 +110,34 @@ const LS_SENARAI = 'scan_senarai';
 
 let db = JSON.parse(localStorage.getItem(LS_HARGA) || '{}');
 let senarai = JSON.parse(localStorage.getItem(LS_SENARAI) || '[]');
-let pendingBarcode = null;
 let codeReader = null;
+let isScanning = false;
 
 const $ = id => document.getElementById(id);
-const fmt = n => 'RM ' + n.toFixed(2);
 
 function render() {
   const ul = $('list');
   ul.innerHTML = '';
+  
   senarai.forEach((it, i) => {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="nm">${it.nama}</span>
-      <span class="pr">${fmt(it.harga)}</span>
-      <button class="del" data-i="${i}">✕</button>`;
+    li.innerHTML = `
+      <div class="info" onclick="bukaEdit(${i})">
+        <span class="nm">${it.nama || '(Belum letak harga)'}</span>
+        <span class="bc">${it.barcode}</span>
+      </div>
+      <span style="font-weight:bold; color:#2563eb;">${it.harga > 0 ? 'RM ' + it.harga.toFixed(2) : ''}</span>
+      <button class="del" data-i="${i}">✕</button>
+    `;
     ul.appendChild(li);
   });
-  ul.querySelectorAll('.del').forEach(b => b.onclick = () => {
+
+  ul.querySelectorAll('.del').forEach(b => b.onclick = (e) => {
+    e.stopPropagation(); 
     senarai.splice(+b.dataset.i, 1);
     saveSenarai(); render();
   });
-  const total = senarai.reduce((s, x) => s + x.harga, 0);
-  $('totalAmt').textContent = fmt(total);
+
   $('count').textContent = senarai.length + ' barang';
   $('resetBtn').classList.toggle('hidden', senarai.length === 0);
 }
@@ -119,89 +145,130 @@ function render() {
 function saveSenarai() { localStorage.setItem(LS_SENARAI, JSON.stringify(senarai)); }
 function saveDb() { localStorage.setItem(LS_HARGA, JSON.stringify(db)); }
 
-function tambah(rec) {
-  senarai.push(rec);
-  saveSenarai(); render();
-  $('msg').textContent = '✅ ' + rec.nama + ' ditambah (' + fmt(rec.harga) + ')';
-}
-
-function onScan(text) {
-  stopScan();
-  pendingBarcode = text;
-  if (db[text]) {
-    tambah({ barcode: text, nama: db[text].nama, harga: db[text].harga });
+window.bukaEdit = function(index) {
+  const it = senarai[index];
+  $('editIndex').value = index;
+  $('inBarcode').value = it.barcode;
+  $('inNama').value = it.nama || '';
+  $('inHarga').value = it.harga > 0 ? it.harga : '';
+  
+  $('overlay').classList.add('show');
+  $('form').style.display = 'block';
+  
+  if (it.harga > 0) {
+    $('inNama').focus(); // Kalau dah ada harga, mungkin nak edit nama
   } else {
-    $('msg').textContent = 'Barang baru: ' + text;
-    $('inNama').value = '';
-    $('inHarga').value = '';
-    $('form').style.display = 'block';
-    $('inNama').focus();
+    $('inHarga').focus(); // Kalau belum ada harga, terus focus kat harga
   }
+};
+
+$('saveBtn').onclick = () => {
+  const idx = parseInt($('editIndex').value);
+  const nama = $('inNama').value.trim();
+  const harga = parseFloat($('inHarga').value) || 0;
+  
+  senarai[idx].nama = nama;
+  senarai[idx].harga = harga;
+
+  // Simpan ke DB supaya next time scan barcode ni, info auto keluar
+  db[senarai[idx].barcode] = { nama, harga };
+  saveDb();
+
+  saveSenarai();
+  render();
+  tutupForm();
+};
+
+function tutupForm() {
+  $('overlay').classList.remove('show');
+  $('form').style.display = 'none';
 }
 
+$('cancelBtn').onclick = tutupForm;
+$('overlay').onclick = tutupForm;
+
+// ===== KAMERA (SCAN NON-STOP) =====
 async function startScan() {
+  if (isScanning) return;
+  
   $('msg').textContent = 'Membuka kamera...';
   $('viewer').style.display = 'block';
+  $('scanBtn').style.display = 'none';
+  $('stopBtn').style.display = 'block';
+  
   try {
     codeReader = new ZXing.BrowserMultiFormatReader();
     const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
     const back = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
+    
     await codeReader.decodeFromVideoDevice(back.deviceId, 'viewer', (res) => {
-      if (res) onScan(res.getText());
+      if (res) {
+        const text = res.getText();
+        
+        // Semak kalau barcode ni dah ada dalam senarai semasa (elak duplicate scan)
+        const dahAda = senarai.find(x => x.barcode === text);
+        if (dahAda) {
+            $('msg').textContent = '⚠️ Barcode ni dah ada dalam senarai!';
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            return; 
+        }
+
+        // Tambah ke senarai
+        senarai.push({ barcode: text, nama: db[text]?.nama || '', harga: db[text]?.harga || 0 });
+        saveSenarai(); 
+        render();
+        
+        if (navigator.vibrate) navigator.vibrate(100);
+        $('msg').textContent = '✅ ' + text + ' ditambah!';
+        
+        // Kamera TIDAK ditutup. Terus scan.
+      }
     });
-    $('msg').textContent = 'Halakan kamera ke kod bar...';
+    isScanning = true;
+    $('msg').textContent = 'Halakan kamera ke barcode (Non-stop)...';
   } catch (e) {
-    $('msg').textContent = 'Kamera gagal: ' + e.message + ' (perlu HTTPS)';
-    $('viewer').style.display = 'none';
+    $('msg').textContent = 'Kamera gagal: ' + e.message;
+    stopScan();
   }
 }
 
 function stopScan() {
   if (codeReader) { codeReader.reset(); codeReader = null; }
+  isScanning = false;
   $('viewer').style.display = 'none';
   $('viewer').innerHTML = '';
+  $('scanBtn').style.display = 'block';
+  $('stopBtn').style.display = 'none';
+  $('msg').textContent = 'Scan berhenti.';
 }
 
-$('scanBtn').onclick = () => { $('form').style.display = 'none'; startScan(); };
+$('scanBtn').onclick = startScan;
+$('stopBtn').onclick = stopScan;
 
-$('saveBtn').onclick = () => {
-  const nama = $('inNama').value.trim();
-  const harga = parseFloat($('inHarga').value);
-  if (!nama || isNaN(harga) || harga < 0) { $('msg').textContent = 'Isi nama & harga yang betul.'; return; }
-  db[pendingBarcode] = { nama, harga };
-  saveDb();
-  tambah({ barcode: pendingBarcode, nama, harga });
-  $('form').style.display = 'none';
-  pendingBarcode = null;
-};
-
-$('cancelBtn').onclick = () => {
-  $('form').style.display = 'none';
-  pendingBarcode = null;
-  $('msg').textContent = '';
+// Manual key in
+$('manualBtn').onclick = () => {
+  stopScan();
+  senarai.push({ barcode: 'manual', nama: '', harga: 0 });
+  saveSenarai();
+  render();
+  bukaEdit(senarai.length - 1);
 };
 
 $('resetBtn').onclick = () => {
-  if (confirm('Kosongkan senarai belian?')) { senarai = []; saveSenarai(); render(); $('msg').textContent = ''; }
+  if (confirm('Kosongkan senarai?')) { senarai = []; saveSenarai(); render(); }
 };
 
-// ===== Backup / Restore =====
+// Backup / Restore
 $('backupBtn').onclick = () => { $('backupMsg').textContent = ''; $('backupModal').classList.add('show'); };
 $('closeBackup').onclick = () => $('backupModal').classList.remove('show');
 
 $('exportBtn').onclick = () => {
-  const data = {
-    versi: 1,
-    tarikh: new Date().toISOString(),
-    harga: db,
-    senarai: senarai
-  };
+  const data = { versi: 4, tarikh: new Date().toISOString(), harga: db, senarai: senarai };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const tarikh = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `scan-harga-backup-${tarikh}.json`;
+  a.download = `scan-barcode-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
   $('backupMsg').textContent = '✅ Fail backup dimuat turun.';
@@ -216,12 +283,13 @@ $('fileInput').onchange = (e) => {
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      if (!data.harga || typeof data.harga !== 'object') throw new Error('Format tidak sah');
-      if (!confirm('Import akan GANTIKAN data harga & senarai semasa. Teruskan?')) return;
-      db = data.harga;
-      senarai = Array.isArray(data.senarai) ? data.senarai : [];
-      saveDb(); saveSenarai(); render();
-      $('backupMsg').textContent = '✅ Import berjaya. ' + Object.keys(db).length + ' harga dimuat.';
+      if (!data.senarai || !Array.isArray(data.senarai)) throw new Error('Format tidak sah');
+      if (!confirm('Import akan GANTIKAN data semasa. Teruskan?')) return;
+      
+      senarai = data.senarai;
+      if (data.harga) db = data.harga;
+      saveSenarai(); saveDb(); render();
+      $('backupMsg').textContent = '✅ Import berjaya.';
     } catch (err) {
       $('backupMsg').textContent = '❌ Gagal import: ' + err.message;
     }
