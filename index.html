@@ -4,14 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Scan Harga</title>
-<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+<!-- Tukar ke html5-qrcode -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin:0; font-family: system-ui, sans-serif; background:#f4f4f5; color:#18181b; padding-bottom:90px; }
   header { background:#18181b; color:#fff; padding:14px 16px; font-weight:600; font-size:18px; display:flex; justify-content:space-between; align-items:center; }
   header button { background:#3f3f46; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-size:13px; cursor:pointer; }
-  #viewer { width:100%; max-height:60vh; background:#000; display:none; }
-  #viewer video { width:100%; height:auto; display:block; }
+  #viewer { width:100%; max-height:60vh; background:#000; display:none; overflow:hidden; }
+  #viewer video { width:100% !important; height:auto !important; display:block; }
   .wrap { padding:16px; }
   .btn { width:100%; padding:16px; font-size:17px; font-weight:600; border:none; border-radius:12px; background:#2563eb; color:#fff; cursor:pointer; }
   .btn.grey { background:#52525b; }
@@ -91,7 +92,7 @@ const LS_SENARAI = 'scan_senarai';
 let db = JSON.parse(localStorage.getItem(LS_HARGA) || '{}');
 let senarai = JSON.parse(localStorage.getItem(LS_SENARAI) || '[]');
 let pendingBarcode = null;
-let codeReader = null;
+let html5QrCode = null; // Guna html5-qrcode sekarang
 
 const $ = id => document.getElementById(id);
 const fmt = n => 'RM ' + n.toFixed(2);
@@ -125,7 +126,7 @@ function tambah(rec) {
   $('msg').textContent = '✅ ' + rec.nama + ' ditambah (' + fmt(rec.harga) + ')';
 }
 
-// ===== Cari nama dari Open Food Facts =====
+// Fungsi cari nama dari Open Food Facts
 async function cariNamaDariOFF(barcode) {
   try {
     const url = `https://world.openfoodfacts.org/api/v2/product/${barcode}.json?fields=product_name,product_name_en,brands`;
@@ -143,22 +144,21 @@ async function cariNamaDariOFF(barcode) {
 }
 
 async function onScan(text) {
-  stopScan();
+  stopScan(); // Tutup kamera serta-merta
   pendingBarcode = text;
 
-  // 1. Dah ada dalam DB sendiri → terus tambah
+  // 1. Dah ada dalam DB → terus tambah
   if (db[text]) {
     tambah({ barcode: text, nama: db[text].nama, harga: db[text].harga });
     return;
   }
 
-  // 2. Barang baru → tunjuk form, cuba cari nama automatik
+  // 2. Barang baru → tunjuk form & cari nama
   $('inNama').value = '';
   $('inHarga').value = '';
   $('form').style.display = 'block';
   $('msg').textContent = '🔍 Mencari nama produk...';
-  $('inNama').focus();
-
+  
   const namaAuto = await cariNamaDariOFF(text);
 
   if (namaAuto) {
@@ -170,44 +170,49 @@ async function onScan(text) {
   $('inHarga').focus();
 }
 
+// ===== KAMERA (html5-qrcode) =====
 async function startScan() {
   $('msg').textContent = 'Membuka kamera...';
   $('viewer').style.display = 'block';
+  $('viewer').innerHTML = '<div id="qr-reader" style="width:100%;"></div>';
+
   try {
-    codeReader = new ZXing.BrowserMultiFormatReader();
-
-    // 1. Minta kebenaran kamera terlebih dahulu (wajib, jika tidak label peranti akan kosong)
-    await navigator.mediaDevices.getUserMedia({ video: true });
-
-    // 2. Senaraikan semua peranti input video
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-
-    // 3. Cuba pilih kamera belakang, jika tiada pilih yang terakhir
-    let deviceId = undefined;
-    const back = videoDevices.find(d => /back|rear|environment/i.test(d.label)) || videoDevices[videoDevices.length - 1];
-    if (back) deviceId = back.deviceId;
-
-    // 4. Mula mengimbas (jika deviceId undefined, ZXing akan pilih kamera utama secara automatik)
-    await codeReader.decodeFromVideoDevice(deviceId, 'viewer', (res) => {
-      if (res) onScan(res.getText());
-    });
-
+    html5QrCode = new Html5Qrcode("qr-reader");
+    await html5QrCode.start(
+      { facingMode: "environment" }, // Kamera belakang
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 150 } // Kotak fokus
+      },
+      (decodedText) => {
+        onScan(decodedText); // Berjaya scan
+      },
+      (errorMessage) => {
+        // Abaikan ralat frame (biasanya sebab tak jumpa barcode)
+      }
+    );
     $('msg').textContent = 'Halakan kamera ke kod bar...';
-  } catch (e) {
-    $('msg').textContent = 'Kamera gagal: ' + e.message;
+  } catch (err) {
+    $('msg').textContent = 'Kamera gagal: ' + err;
     $('viewer').style.display = 'none';
   }
 }
 
 function stopScan() {
-  if (codeReader) { codeReader.reset(); codeReader = null; }
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => {
+      html5QrCode.clear();
+      html5QrCode = null;
+    }).catch(() => {});
+  }
   $('viewer').style.display = 'none';
   $('viewer').innerHTML = '';
 }
 
+// Butang Scan
 $('scanBtn').onclick = () => { $('form').style.display = 'none'; startScan(); };
 
+// Simpan Harga
 $('saveBtn').onclick = () => {
   const nama = $('inNama').value.trim();
   const harga = parseFloat($('inHarga').value);
@@ -229,6 +234,7 @@ $('resetBtn').onclick = () => {
   if (confirm('Kosongkan senarai belian?')) { senarai = []; saveSenarai(); render(); $('msg').textContent = ''; }
 };
 
+// Backup & Restore
 $('backupBtn').onclick = () => { $('backupMsg').textContent = ''; $('backupModal').classList.add('show'); };
 $('closeBackup').onclick = () => $('backupModal').classList.remove('show');
 
