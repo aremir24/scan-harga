@@ -172,8 +172,9 @@ $('saveBtn').onclick = () => {
   senarai[editIndex].nama = nama;
   senarai[editIndex].harga = harga;
 
+  // Simpan ke memori
   if (barcode !== 'manual' && nama !== '') {
-    dbHarga[barcode] = { nama, harga };
+    dbHarga[barcode] = { nama: nama, harga: harga };
     localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
   }
 
@@ -191,10 +192,12 @@ $('cancelBtn').onclick = tutupForm;
 $('overlay').onclick = tutupForm;
 
 function onScanSuccess(decodedText) {
+  // Kalau tengah process popup, jangan scan
   if (isProcessingScan) return;
 
   if (navigator.vibrate) navigator.vibrate(100);
 
+  // Semak kalau dah ada dalam senarai semasa
   const dahAda = senarai.find(x => x.barcode === decodedText);
   if (dahAda) {
     $('msg').textContent = '⚠️ Barang dah ada dalam senarai!';
@@ -202,20 +205,26 @@ function onScanSuccess(decodedText) {
     return;
   }
 
+  // Ambil data dari memori (memoriHarga)
   const memori = dbHarga[decodedText];
   
+  let namaBaru = memori && memori.nama ? String(memori.nama).trim() : '';
+  let hargaBaru = memori && memori.harga ? parseFloat(memori.harga) : 0;
+  
+  // Masukkan ke senarai
   senarai.push({ 
     barcode: decodedText, 
-    nama: memori ? memori.nama : '', 
-    harga: memori ? memori.harga : 0 
+    nama: namaBaru, 
+    harga: hargaBaru 
   });
   
   render();
   
-  $('msg').textContent = '✅ ' + (memori && memori.nama ? memori.nama : decodedText) + ' ditambah!';
+  $('msg').textContent = '✅ ' + (namaBaru ? namaBaru : decodedText) + ' ditambah!';
   $('msg').style.color = '#16a34a';
 
-  if (!memori || !memori.nama) {
+  // KALAU NAMA KOSONG BARU KELUAR POPUP
+  if (namaBaru === '') {
     isProcessingScan = true; 
     bukaForm(senarai.length - 1);
   }
@@ -257,7 +266,7 @@ $('resetBtn').onclick = () => {
   }
 };
 
-// ===== FUNGSI BACKUP & IMPORT (MERGE) =====
+// ===== FUNGSI BACKUP & IMPORT =====
 $('backupBtn').onclick = () => {
   $('overlay').classList.add('show');
   $('backupModal').style.display = 'block';
@@ -268,13 +277,8 @@ $('closeBackup').onclick = () => {
   $('backupModal').style.display = 'none';
 };
 
-// Export (Simpan)
 $('exportBtn').onclick = () => {
-  const dataSimpan = { 
-    tarikh: new Date().toISOString(), 
-    senarai: senarai, 
-    memoriHarga: dbHarga 
-  };
+  const dataSimpan = { tarikh: new Date().toISOString(), senarai: senarai, memoriHarga: dbHarga };
   const dataTeks = JSON.stringify(dataSimpan, null, 2);
   const blob = new Blob([dataTeks], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -286,10 +290,9 @@ $('exportBtn').onclick = () => {
   
   URL.revokeObjectURL(url);
   $('closeBackup').click();
-  alert("✅ Fail backup berjaya dimuat turun ke folder Download!");
+  alert("✅ Fail backup dimuat turun!");
 };
 
-// Import (Pulihkan & CAMPUR)
 $('fileInput').onchange = (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -299,22 +302,31 @@ $('fileInput').onchange = (e) => {
     try {
       const data = JSON.parse(event.target.result);
       
-      if (!data.memoriHarga) {
-        throw new Error("Fail ini tiada data memori harga.");
+      // Support format lama (harga) dan format baru (memoriHarga)
+      const dataHarga = data.memoriHarga || data.harga;
+
+      if (!dataHarga) {
+        throw new Error("Fail ini tiada data harga.");
       }
 
       // CAMPURKAN (MERGE) data memori harga
-      // Fail JSON akan overwrite (ambil alih) harga lama jika ada barcode yang sama
-      for (let barcode in data.memoriHarga) {
-        dbHarga[barcode] = data.memoriHarga[barcode];
+      let count = 0;
+      for (let barcode in dataHarga) {
+        // Pastikan format betul
+        if (dataHarga[barcode] && dataHarga[barcode].nama) {
+            dbHarga[barcode] = {
+                nama: dataHarga[barcode].nama,
+                harga: dataHarga[barcode].harga || 0
+            };
+            count++;
+        }
       }
       
       localStorage.setItem(LS_HARGA, JSON.stringify(dbHarga));
 
-      // CAMPURKAN senarai (jika fail tu ada senarai)
+      // CAMPURKAN senarai jika ada
       if (data.senarai && Array.isArray(data.senarai)) {
         data.senarai.forEach(itemBaru => {
-          // Kalau barang dah ada dalam senarai skrin, jangan tambah dua kali
           if (!senarai.find(x => x.barcode === itemBaru.barcode)) {
              senarai.push(itemBaru);
           }
@@ -324,7 +336,7 @@ $('fileInput').onchange = (e) => {
       
       render();
       $('closeBackup').click();
-      alert("✅ Data berjaya dicampur (Merge)! Harga lama dikekalkan, harga baru ditambah.");
+      alert(`✅ Berjaya! ${count} data barang dimasukkan ke dalam memori.`);
       
     } catch (err) {
       alert("❌ Gagal import: " + err.message);
